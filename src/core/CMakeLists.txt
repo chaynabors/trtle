@@ -1,0 +1,22 @@
+target_sources(trtle PRIVATE
+    cartridge.c
+    cartridge.h
+    dma.c
+    dma.h
+    gameboy.c
+    gameboy.h
+    interrupt_controller.c
+    interrupt_controller.h
+    joypad.c
+    joypad.h
+    ppu.c
+    ppu.h
+    processor.c
+    processor.h
+    serial.c
+    serial.h
+    sound_controller.c
+    sound_controller.h
+    timer.c
+    timer.h
+)
