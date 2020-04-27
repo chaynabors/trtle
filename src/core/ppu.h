@@ -49,7 +49,10 @@ typedef struct PPU {
     size_t count;
 } PPU;
 
-void ppu_initialize(GameBoy * const gb);
+PPU * ppu_create();
+void ppu_delete(PPU ** ppu);
+void ppu_initialize(PPU * const ppu, bool skip_bootrom);
+
 void ppu_cycle(GameBoy * const gb);
 
 uint8_t ppu_read_lcdc(GameBoy const * const gb);

@@ -3,6 +3,6 @@
 
 #include "cartridge.h"
 #include "gameboy.h"
-#include "logging.h"
+#include "logger.h"
 
 #endif /* !TRTLE_TRTLE_H */

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "cartridge.h"
+
 #include "gameboy.h"
 
 #define MBC_CARTRIDGE_TYPE_ADDRESS (0x0147)
@@ -158,18 +159,18 @@ CartridgeError cartridge_from_file(Cartridge ** return_cart, char const * const 
     return CARTRIDGE_ERROR_NONE;
 }
 
-void cartridge_delete(Cartridge * cart) {
-    if (cart != NULL) {
-        if (cart->rom != NULL) {
-            free(cart->rom);
-            cart->rom = NULL;
+void cartridge_delete(Cartridge ** const cart) {
+    if (*cart != NULL) {
+        if ((*cart)->rom != NULL) {
+            free((*cart)->rom);
+            (*cart)->rom = NULL;
         }
-        if (cart->ram != NULL) {
-            free(cart->ram);
-            cart->ram = NULL;
+        if ((*cart)->ram != NULL) {
+            free((*cart)->ram);
+            (*cart)->ram = NULL;
         }
-        free(cart);
-        cart = NULL;
+        free(*cart);
+        *cart = NULL;
     }
 }
 
@@ -262,7 +263,7 @@ void cartridge_write_rom(GameBoy * const gb, uint16_t address, uint8_t value) {
         case MBC_NONE:
         case MBC_NONE_RAM:
         case MBC_NONE_RAM_BATTERY: {
-            TRTLE_LOG_WARN("Attempted to write to ROM with no MBC\n");
+            TRTLE_LOG_INFO("Attempted to write to ROM with no MBC\n");
         } break;
 
         case MBC_MBC1:

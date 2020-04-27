@@ -11,7 +11,9 @@ typedef struct DMA {
     bool active;
 } DMA;
 
-void dma_initialize(GameBoy * const gb);
+DMA * dma_create();
+void dma_delete(DMA ** const dma);
+void dma_initialize(DMA * const dma, bool skip_bootrom);
 
 void dma_cycle(GameBoy * const gb);
 

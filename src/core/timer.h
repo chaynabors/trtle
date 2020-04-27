@@ -10,11 +10,11 @@ typedef struct Timer {
         uint16_t internal_counter;
         struct {
 #ifdef LITTLE_ENDIAN
-            uint8_t _ignore;
+            uint8_t __ignore;
             uint8_t div;
 #elif BIG_ENDIAN
             uint8_t div;
-            uint8_t _ignore;
+            uint8_t __ignore;
 #endif
         };
     };
@@ -25,7 +25,10 @@ typedef struct Timer {
     bool writing_tima;
 } Timer;
 
-void timer_initialize(GameBoy * const gb, bool skip_bootrom);
+Timer * timer_create();
+void timer_delete(Timer ** const t);
+void timer_initialize(Timer * const t, bool skip_bootrom);
+
 void timer_cycle(GameBoy * const gb);
 
 void timer_write_div(GameBoy * const gb);

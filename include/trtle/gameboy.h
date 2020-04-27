@@ -4,15 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define GAMEBOY_BACKGROUND_WIDTH  (256)
-#define GAMEBOY_BACKGROUND_HEIGHT (256)
-#define GAMEBOY_DISPLAY_WIDTH     (160)
-#define GAMEBOY_DISPLAY_HEIGHT    (144)
-#define GAMEBOY_TILESET_WIDTH     (128)
-#define GAMEBOY_TILESET_HEIGHT    (192)
-
-typedef struct Cartridge Cartridge;
-typedef struct GameBoy GameBoy;
+#define GAMEBOY_DISPLAY_WIDTH  (160)
+#define GAMEBOY_DISPLAY_HEIGHT (144)
 
 typedef struct GameBoyInput {
     bool a;
@@ -25,14 +18,53 @@ typedef struct GameBoyInput {
     bool right;
 } GameBoyInput;
 
-extern GameBoy * gameboy_create();
-extern void gameboy_delete(GameBoy * gb);
-extern void gameboy_insert_cartridge(GameBoy * gb, Cartridge * cart);
-extern void gameboy_initialize(GameBoy * const gb, bool skip_bootrom);
-extern void gameboy_update(GameBoy * const gb, GameBoyInput input);
-extern void gameboy_update_to_vblank(GameBoy * const gb, GameBoyInput input);
-extern size_t gameboy_get_background_data(GameBoy const * const gb, uint8_t data[], size_t length);
-extern size_t gameboy_get_display_data(GameBoy const * const gb, uint8_t data[], size_t length);
-extern size_t gameboy_get_tileset_data(GameBoy const * const gb, uint8_t data[], size_t length);
+#if defined(TRTLE_INTERNAL)
+#include "cartridge.h"
+#include "dma.h"
+#include "interrupt_controller.h"
+#include "joypad.h"
+#include "ppu.h"
+#include "processor.h"
+#include "serial.h"
+#include "sound_controller.h"
+#include "timer.h"
+
+#define GAMEBOY_BOOTROM_ADDRESS     (0x0000)
+#define GAMEBOY_ROM_ADDRESS         (0x0000)
+#define GAMEBOY_VRAM_ADDRESS        (0x8000)
+#define GAMEBOY_OAM_ADDRESS         (0xFE00)
+
+typedef struct GameBoy {
+    Cartridge * cartridge;
+    DMA * dma;
+    InterruptController * interrupt_controller;
+    Joypad * joypad;
+    PPU * ppu;
+    Processor * processor;
+    Serial * serial;
+    SoundController * sound_controller;
+    Timer * timer;
+    uint8_t boot;
+} GameBoy;
+
+void gameboy_cycle(GameBoy * const gb);
+
+uint8_t gameboy_read(GameBoy * const gb, uint16_t address);
+void gameboy_write(GameBoy * const gb, uint16_t address, uint8_t value);
+
+#endif /* !TRTLE_INTERNAL */
+
+GameBoy * gameboy_create();
+void gameboy_delete(GameBoy ** gb);
+void gameboy_initialize(GameBoy * const gb, bool skip_bootrom);
+
+void gameboy_set_cartridge(GameBoy * const gb, Cartridge * const cartridge);
+
+void gameboy_update(GameBoy * const gb, GameBoyInput input);
+void gameboy_update_to_vblank(GameBoy * const gb, GameBoyInput input);
+
+size_t gameboy_get_background_data(GameBoy const * const gb, uint8_t data[], size_t length);
+size_t gameboy_get_display_data(GameBoy const * const gb, uint8_t data[], size_t length);
+size_t gameboy_get_tileset_data(GameBoy const * const gb, uint8_t data[], size_t length);
 
 #endif /* !TRTLE_GAMEBOY_H */

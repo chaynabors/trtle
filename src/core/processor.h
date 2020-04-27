@@ -64,7 +64,10 @@ typedef struct Processor {
     bool skip_next_interrupt;
 } Processor;
 
-void processor_initialize(GameBoy * const gb, bool skip_bootrom);
+Processor * processor_create();
+void processor_delete(Processor ** const p);
+void processor_initialize(Processor * const p, bool skip_bootrom);
+
 void processor_process_instruction(GameBoy * const gb);
 
 #endif /* !TRTLE_PROCESSOR_H */

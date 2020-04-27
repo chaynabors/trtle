@@ -10,7 +10,9 @@ typedef struct Joypad {
     uint8_t directions;
 } Joypad;
 
-void joypad_initialize(GameBoy * const gb);
+Joypad * joypad_create();
+void joypad_delete(Joypad ** const jp);
+void joypad_initialize(Joypad * const jp, bool skip_bootrom);
 
 uint8_t joypad_read_p1(GameBoy * const gb);
 void joypad_write_p1(GameBoy * const gb, uint8_t value);

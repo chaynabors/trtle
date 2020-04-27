@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "processor.h"
+
 #include "interrupt_controller.h"
 #include "gameboy.h"
 
@@ -11,817 +12,826 @@
 #define PROCESSOR_NEGATIVE_BIT   (0b01000000)
 #define PROCESSOR_ZERO_BIT       (0b10000000)
 
-void processor_initialize(GameBoy * const gb, bool skip_bootrom) {
-    gb->processor.af = 0x01B0;
-    gb->processor.bc = 0x0013;
-    gb->processor.de = 0x00D8;
-    gb->processor.hl = 0x014D;
-    gb->processor.sp = 0xFFFE;
-    gb->processor.pc = skip_bootrom ? 0x0100 : 0x0000;
-    gb->processor.halt_mode = false;
-    gb->processor.skip_pc_increment = false;
-    gb->processor.skip_next_interrupt = false;
+Processor * processor_create() {
+    return calloc(1, sizeof(Processor));
+}
+
+void processor_delete(Processor ** const p) {
+    free(*p);
+    *p = NULL;
+}
+
+void processor_initialize(Processor * const p, bool skip_bootrom) {
+    p->af = 0x01B0;
+    p->bc = 0x0013;
+    p->de = 0x00D8;
+    p->hl = 0x014D;
+    p->sp = 0xFFFE;
+    p->pc = skip_bootrom ? 0x0100 : 0x0000;
+    p->halt_mode = false;
+    p->skip_pc_increment = false;
+    p->skip_next_interrupt = false;
 }
 
 #define LD_R_R(reg1, reg2)\
 static void ld_##reg1##_##reg2(GameBoy * const gb) {\
-    gb->processor.reg1 = gb->processor.reg2;\
+    gb->processor->reg1 = gb->processor->reg2;\
 }
 
 #define LD_R_D8(reg)\
 static void ld_##reg##_d8(GameBoy * const gb) {\
-    gb->processor.reg = gameboy_read(gb, gb->processor.pc);\
-    gb->processor.pc += 1;\
+    gb->processor->reg = gameboy_read(gb, gb->processor->pc);\
+    gb->processor->pc += 1;\
     gameboy_cycle(gb);\
 }
 
 #define LD_R_DHL(reg)\
 static void ld_##reg##_dhl(GameBoy * const gb) {\
-    gb->processor.reg = gameboy_read(gb, gb->processor.hl);\
+    gb->processor->reg = gameboy_read(gb, gb->processor->hl);\
     gameboy_cycle(gb);\
 }
 
 #define LD_DHL_R(reg)\
 static void ld_dhl_##reg(GameBoy * const gb) {\
-    gameboy_write(gb, gb->processor.hl, gb->processor.reg);\
+    gameboy_write(gb, gb->processor->hl, gb->processor->reg);\
     gameboy_cycle(gb);\
 }
 
 static void ld_dhl_d8(GameBoy * const gb) {
-    uint8_t val = gameboy_read(gb, gb->processor.pc);
-    gb->processor.pc += 1;
+    uint8_t val = gameboy_read(gb, gb->processor->pc);
+    gb->processor->pc += 1;
     gameboy_cycle(gb);
-    gameboy_write(gb, gb->processor.hl, val);
+    gameboy_write(gb, gb->processor->hl, val);
     gameboy_cycle(gb);
 }
 
 #define LD_A_DRR(reg)\
 static void ld_a_d##reg(GameBoy * const gb) {\
-    gb->processor.a = gameboy_read(gb, gb->processor.reg);\
+    gb->processor->a = gameboy_read(gb, gb->processor->reg);\
     gameboy_cycle(gb);\
 }
 
 #define LD_DRR_A(reg)\
 static void ld_d##reg##_a(GameBoy * const gb) {\
-    gameboy_write(gb, gb->processor.reg, gb->processor.a);\
+    gameboy_write(gb, gb->processor->reg, gb->processor->a);\
     gameboy_cycle(gb);\
 }
 
 static void ld_a_da16(GameBoy * const gb) {
-    uint16_t addr = gameboy_read(gb, gb->processor.pc);
-    gb->processor.pc += 1;
+    uint16_t addr = gameboy_read(gb, gb->processor->pc);
+    gb->processor->pc += 1;
     gameboy_cycle(gb);
-    addr |= gameboy_read(gb, gb->processor.pc) << 8;
-    gb->processor.pc += 1;
+    addr |= gameboy_read(gb, gb->processor->pc) << 8;
+    gb->processor->pc += 1;
     gameboy_cycle(gb);
-    gb->processor.a = gameboy_read(gb, addr);
+    gb->processor->a = gameboy_read(gb, addr);
     gameboy_cycle(gb);
 }
 
 static void ld_da16_a(GameBoy * const gb) {
-    uint16_t addr = gameboy_read(gb, gb->processor.pc);
-    gb->processor.pc += 1;
+    uint16_t addr = gameboy_read(gb, gb->processor->pc);
+    gb->processor->pc += 1;
     gameboy_cycle(gb);
-    addr |= gameboy_read(gb, gb->processor.pc) << 8;
-    gb->processor.pc += 1;
+    addr |= gameboy_read(gb, gb->processor->pc) << 8;
+    gb->processor->pc += 1;
     gameboy_cycle(gb);
-    gameboy_write(gb, addr, gb->processor.a);
+    gameboy_write(gb, addr, gb->processor->a);
     gameboy_cycle(gb);
 }
 
 static void ldh_a_dc(GameBoy * const gb) {
-    gb->processor.a = (gb, gameboy_read(gb, 0xFF00 | gb->processor.c));
+    gb->processor->a = (gb, gameboy_read(gb, 0xFF00 | gb->processor->c));
     gameboy_cycle(gb);
 }
 
 static void ldh_dc_a(GameBoy * const gb) {
-    gameboy_write(gb, 0xFF00 | gb->processor.c, gb->processor.a);
+    gameboy_write(gb, 0xFF00 | gb->processor->c, gb->processor->a);
     gameboy_cycle(gb);
 }
 
 static void ldh_a_da8(GameBoy * const gb) {
-    uint16_t addr = 0xFF00 | gameboy_read(gb, gb->processor.pc++);
+    uint16_t addr = 0xFF00 | gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    gb->processor.a = gameboy_read(gb, addr);
+    gb->processor->a = gameboy_read(gb, addr);
     gameboy_cycle(gb);
 }
 
 static void ldh_da8_a(GameBoy * const gb) {
-    uint16_t addr = 0xFF00 | gameboy_read(gb, gb->processor.pc++);
+    uint16_t addr = 0xFF00 | gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    gameboy_write(gb, addr, gb->processor.a);
+    gameboy_write(gb, addr, gb->processor->a);
     gameboy_cycle(gb);
 }
 
 static void ld_a_dhld(GameBoy * const gb) {
-    gb->processor.a = gameboy_read(gb, gb->processor.hl);
-    gb->processor.hl -= 1;
+    gb->processor->a = gameboy_read(gb, gb->processor->hl);
+    gb->processor->hl -= 1;
     gameboy_cycle(gb);
 }
 
 static void ld_dhld_a(GameBoy * const gb) {
-    gameboy_write(gb, gb->processor.hl, gb->processor.a);
-    gb->processor.hl -= 1;
+    gameboy_write(gb, gb->processor->hl, gb->processor->a);
+    gb->processor->hl -= 1;
     gameboy_cycle(gb);
 }
 
 static void ld_a_dhli(GameBoy * const gb) {
-    gb->processor.a = gameboy_read(gb, gb->processor.hl);
-    gb->processor.hl += 1;
+    gb->processor->a = gameboy_read(gb, gb->processor->hl);
+    gb->processor->hl += 1;
     gameboy_cycle(gb);
 }
 
 static void ld_dhli_a(GameBoy * const gb) {
-    gameboy_write(gb, gb->processor.hl, gb->processor.a);
-    gb->processor.hl += 1;
+    gameboy_write(gb, gb->processor->hl, gb->processor->a);
+    gb->processor->hl += 1;
     gameboy_cycle(gb);
 }
 
 #define LD_RR_D16(reg)\
 static void ld_##reg##_d16(GameBoy * const gb) {\
-    uint16_t val = gameboy_read(gb, gb->processor.pc++);\
+    uint16_t val = gameboy_read(gb, gb->processor->pc++);\
     gameboy_cycle(gb);\
-    val |= gameboy_read(gb, gb->processor.pc++) << 8;\
+    val |= gameboy_read(gb, gb->processor->pc++) << 8;\
     gameboy_cycle(gb);\
-    gb->processor.reg = val;\
+    gb->processor->reg = val;\
 }
 
 static void ld_da16_sp(GameBoy * const gb) {
-    uint16_t addr = gameboy_read(gb, gb->processor.pc++);
+    uint16_t addr = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    addr |= gameboy_read(gb, gb->processor.pc++) << 8;
+    addr |= gameboy_read(gb, gb->processor->pc++) << 8;
     gameboy_cycle(gb);
-    gameboy_write(gb, addr, (gb->processor.sp) & 0x00FF);
+    gameboy_write(gb, addr, (gb->processor->sp) & 0x00FF);
     gameboy_cycle(gb);
-    gameboy_write(gb, addr + 1, (gb->processor.sp) >> 8);
+    gameboy_write(gb, addr + 1, (gb->processor->sp) >> 8);
     gameboy_cycle(gb);
 }
 
 static void ld_sp_hl(GameBoy * const gb) {
-    gb->processor.sp = gb->processor.hl;
+    gb->processor->sp = gb->processor->hl;
     gameboy_cycle(gb);
 }
 
 #define PUSH_RR(reg)\
 static void push_##reg(GameBoy * const gb) {\
     gameboy_cycle(gb);\
-    gameboy_write(gb, --gb->processor.sp, gb->processor.reg >> 8);\
+    gameboy_write(gb, --gb->processor->sp, gb->processor->reg >> 8);\
     gameboy_cycle(gb);\
-    gameboy_write(gb, --gb->processor.sp, gb->processor.reg & 0x00FF);\
+    gameboy_write(gb, --gb->processor->sp, gb->processor->reg & 0x00FF);\
     gameboy_cycle(gb);\
 }
 
 #define POP_RR(reg)\
 static void pop_##reg(GameBoy * const gb) {\
-    uint16_t val = gameboy_read(gb, gb->processor.sp++);\
+    uint16_t val = gameboy_read(gb, gb->processor->sp++);\
     gameboy_cycle(gb);\
-    val |= gameboy_read(gb, gb->processor.sp++) << 8;\
+    val |= gameboy_read(gb, gb->processor->sp++) << 8;\
     gameboy_cycle(gb);\
-    gb->processor.reg = val;\
+    gb->processor->reg = val;\
 }
 
 static void pop_af(GameBoy * const gb) {
-    uint16_t val = gameboy_read(gb, gb->processor.sp++);
+    uint16_t val = gameboy_read(gb, gb->processor->sp++);
     gameboy_cycle(gb);
-    val |= gameboy_read(gb, gb->processor.sp++) << 8;
+    val |= gameboy_read(gb, gb->processor->sp++) << 8;
     gameboy_cycle(gb);
-    gb->processor.af = val & 0xFFF0;
+    gb->processor->af = val & 0xFFF0;
 }
 
 #define INC_R(reg)\
 static void inc_##reg(GameBoy * const gb) {\
-    gb->processor.reg += 1;\
+    gb->processor->reg += 1;\
 \
-    gb->processor.f &= PROCESSOR_CARRY_BIT;\
-    if ((gb->processor.reg & 0x0F) == 0) gb->processor.f |= PROCESSOR_HALF_BIT;\
-    if (gb->processor.reg == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    gb->processor->f &= PROCESSOR_CARRY_BIT;\
+    if ((gb->processor->reg & 0x0F) == 0) gb->processor->f |= PROCESSOR_HALF_BIT;\
+    if (gb->processor->reg == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
 }
 
 #define DEC_R(reg)\
 static void dec_##reg(GameBoy * const gb) {\
-    gb->processor.reg -= 1;\
+    gb->processor->reg -= 1;\
 \
-    gb->processor.f &= PROCESSOR_CARRY_BIT;\
-    gb->processor.f |= PROCESSOR_NEGATIVE_BIT;\
-    if ((gb->processor.reg & 0x0F) == 0x0F) gb->processor.f |= PROCESSOR_HALF_BIT;\
-    if (gb->processor.reg == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    gb->processor->f &= PROCESSOR_CARRY_BIT;\
+    gb->processor->f |= PROCESSOR_NEGATIVE_BIT;\
+    if ((gb->processor->reg & 0x0F) == 0x0F) gb->processor->f |= PROCESSOR_HALF_BIT;\
+    if (gb->processor->reg == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
 }
 
 #define ADD_A_R(reg)\
 static void add_a_##reg(GameBoy * const gb) {\
-    uint8_t initial = gb->processor.a;\
-    uint8_t add = gb->processor.reg;\
+    uint8_t initial = gb->processor->a;\
+    uint8_t add = gb->processor->reg;\
 \
-    gb->processor.a += add;\
+    gb->processor->a += add;\
 \
-    gb->processor.f = 0;\
-    if (((initial & 0x0F) + (add & 0x0F)) & 0x10) gb->processor.f |= PROCESSOR_HALF_BIT;\
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
-    if (((uint16_t)initial) + ((uint16_t)add) > 0xFF) gb->processor.f |= PROCESSOR_CARRY_BIT;\
+    gb->processor->f = 0;\
+    if (((initial & 0x0F) + (add & 0x0F)) & 0x10) gb->processor->f |= PROCESSOR_HALF_BIT;\
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
+    if (((uint16_t)initial) + ((uint16_t)add) > 0xFF) gb->processor->f |= PROCESSOR_CARRY_BIT;\
 }
 
 static void add_a_dhl(GameBoy * const gb) {
-    uint8_t initial = gb->processor.a;
-    uint8_t add = gameboy_read(gb, gb->processor.hl);
+    uint8_t initial = gb->processor->a;
+    uint8_t add = gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
 
-    gb->processor.a += add;
+    gb->processor->a += add;
 
-    gb->processor.f = 0;
-    if (((initial & 0x0F) + (add & 0x0F)) & 0x10) gb->processor.f |= PROCESSOR_HALF_BIT;
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
-    if (((uint16_t)initial) + ((uint16_t)add) > 0xFF) gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f = 0;
+    if (((initial & 0x0F) + (add & 0x0F)) & 0x10) gb->processor->f |= PROCESSOR_HALF_BIT;
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
+    if (((uint16_t)initial) + ((uint16_t)add) > 0xFF) gb->processor->f |= PROCESSOR_CARRY_BIT;
 }
 
 static void add_a_d8(GameBoy * const gb) {
-    uint8_t initial = gb->processor.a;
-    uint8_t add = gameboy_read(gb, gb->processor.pc);
-    gb->processor.pc += 1;
+    uint8_t initial = gb->processor->a;
+    uint8_t add = gameboy_read(gb, gb->processor->pc);
+    gb->processor->pc += 1;
     gameboy_cycle(gb);
 
-    gb->processor.a += add;
+    gb->processor->a += add;
 
-    gb->processor.f = 0;
-    if (((initial & 0x0F) + (add & 0x0F)) & 0x10) gb->processor.f |= PROCESSOR_HALF_BIT;
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
-    if (((uint16_t)initial) + ((uint16_t)add) > 0xFF) gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f = 0;
+    if (((initial & 0x0F) + (add & 0x0F)) & 0x10) gb->processor->f |= PROCESSOR_HALF_BIT;
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
+    if (((uint16_t)initial) + ((uint16_t)add) > 0xFF) gb->processor->f |= PROCESSOR_CARRY_BIT;
 }
 
 #define ADC_A_R(reg)\
 static void adc_a_##reg(GameBoy * const gb) {\
-    uint8_t initial = gb->processor.a;\
-    uint8_t add = gb->processor.reg;\
-    uint8_t car = (gb->processor.f & PROCESSOR_CARRY_BIT) != 0;\
+    uint8_t initial = gb->processor->a;\
+    uint8_t add = gb->processor->reg;\
+    uint8_t car = (gb->processor->f & PROCESSOR_CARRY_BIT) != 0;\
 \
-    gb->processor.a += add + car;\
+    gb->processor->a += add + car;\
 \
-    gb->processor.f = 0;\
-    if (((initial & 0x0F) + (add & 0x0F) + (car & 0x0F)) & 0x10) gb->processor.f |= PROCESSOR_HALF_BIT;\
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
-    if (((uint16_t)initial) + ((uint16_t)add) + ((uint16_t)car) > 0xFF) gb->processor.f |= PROCESSOR_CARRY_BIT;\
+    gb->processor->f = 0;\
+    if (((initial & 0x0F) + (add & 0x0F) + (car & 0x0F)) & 0x10) gb->processor->f |= PROCESSOR_HALF_BIT;\
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
+    if (((uint16_t)initial) + ((uint16_t)add) + ((uint16_t)car) > 0xFF) gb->processor->f |= PROCESSOR_CARRY_BIT;\
 }
 
 static void adc_a_dhl(GameBoy * const gb) {
-    uint8_t initial = gb->processor.a;
-    uint8_t add = gameboy_read(gb, gb->processor.hl);
+    uint8_t initial = gb->processor->a;
+    uint8_t add = gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
-    uint8_t car = (gb->processor.f & PROCESSOR_CARRY_BIT) != 0;
+    uint8_t car = (gb->processor->f & PROCESSOR_CARRY_BIT) != 0;
 
-    gb->processor.a += add + car;
+    gb->processor->a += add + car;
 
-    gb->processor.f = 0;
-    if (((initial & 0x0F) + (add & 0x0F) + (car & 0x0F)) & 0x10) gb->processor.f |= PROCESSOR_HALF_BIT;
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
-    if (((uint16_t)initial) + ((uint16_t)add) + ((uint16_t)car) > 0xFF) gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f = 0;
+    if (((initial & 0x0F) + (add & 0x0F) + (car & 0x0F)) & 0x10) gb->processor->f |= PROCESSOR_HALF_BIT;
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
+    if (((uint16_t)initial) + ((uint16_t)add) + ((uint16_t)car) > 0xFF) gb->processor->f |= PROCESSOR_CARRY_BIT;
 }
 
 static void adc_a_d8(GameBoy * const gb) {
-    uint8_t initial = gb->processor.a;
-    uint8_t add = gameboy_read(gb, gb->processor.pc);
-    gb->processor.pc += 1;
+    uint8_t initial = gb->processor->a;
+    uint8_t add = gameboy_read(gb, gb->processor->pc);
+    gb->processor->pc += 1;
     gameboy_cycle(gb);
-    uint8_t car = (gb->processor.f & PROCESSOR_CARRY_BIT) != 0;
+    uint8_t car = (gb->processor->f & PROCESSOR_CARRY_BIT) != 0;
 
-    gb->processor.a += add + car;
+    gb->processor->a += add + car;
 
-    gb->processor.f = 0;
-    if (((initial & 0x0F) + (add & 0x0F) + (car & 0x0F)) & 0x10) gb->processor.f |= PROCESSOR_HALF_BIT;
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
-    if (((uint16_t)initial) + ((uint16_t)add) + ((uint16_t)car) > 0xFF) gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f = 0;
+    if (((initial & 0x0F) + (add & 0x0F) + (car & 0x0F)) & 0x10) gb->processor->f |= PROCESSOR_HALF_BIT;
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
+    if (((uint16_t)initial) + ((uint16_t)add) + ((uint16_t)car) > 0xFF) gb->processor->f |= PROCESSOR_CARRY_BIT;
 }
 
 #define SUB_A_R(reg)\
 static void sub_a_##reg(GameBoy * const gb) {\
-    uint8_t initial = gb->processor.a;\
-    uint8_t sub = gb->processor.reg;\
+    uint8_t initial = gb->processor->a;\
+    uint8_t sub = gb->processor->reg;\
 \
-    gb->processor.a -= sub;\
+    gb->processor->a -= sub;\
 \
-    gb->processor.f = PROCESSOR_NEGATIVE_BIT;\
-    if ((initial & 0x0F) < (sub & 0x0F)) gb->processor.f |= PROCESSOR_HALF_BIT;\
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
-    if (initial < sub) gb->processor.f |= PROCESSOR_CARRY_BIT;\
+    gb->processor->f = PROCESSOR_NEGATIVE_BIT;\
+    if ((initial & 0x0F) < (sub & 0x0F)) gb->processor->f |= PROCESSOR_HALF_BIT;\
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
+    if (initial < sub) gb->processor->f |= PROCESSOR_CARRY_BIT;\
 }
 
 static void sub_a_dhl(GameBoy * const gb) {
-    uint8_t initial = gb->processor.a;
-    uint8_t sub = gameboy_read(gb, gb->processor.hl);
+    uint8_t initial = gb->processor->a;
+    uint8_t sub = gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
 
-    gb->processor.a -= sub;
+    gb->processor->a -= sub;
 
-    gb->processor.f = PROCESSOR_NEGATIVE_BIT;
-    if ((initial & 0x0F) < (sub & 0x0F)) gb->processor.f |= PROCESSOR_HALF_BIT;
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
-    if (initial < sub) gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f = PROCESSOR_NEGATIVE_BIT;
+    if ((initial & 0x0F) < (sub & 0x0F)) gb->processor->f |= PROCESSOR_HALF_BIT;
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
+    if (initial < sub) gb->processor->f |= PROCESSOR_CARRY_BIT;
 }
 
 static void sub_a_d8(GameBoy * const gb) {
-    uint8_t initial = gb->processor.a;
-    uint8_t sub = gameboy_read(gb, gb->processor.pc);
-    gb->processor.pc += 1;
+    uint8_t initial = gb->processor->a;
+    uint8_t sub = gameboy_read(gb, gb->processor->pc);
+    gb->processor->pc += 1;
     gameboy_cycle(gb);
 
-    gb->processor.a -= sub;
+    gb->processor->a -= sub;
 
-    gb->processor.f = PROCESSOR_NEGATIVE_BIT;
-    if ((initial & 0x0F) < (sub & 0x0F)) gb->processor.f |= PROCESSOR_HALF_BIT;
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
-    if (initial < sub) gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f = PROCESSOR_NEGATIVE_BIT;
+    if ((initial & 0x0F) < (sub & 0x0F)) gb->processor->f |= PROCESSOR_HALF_BIT;
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
+    if (initial < sub) gb->processor->f |= PROCESSOR_CARRY_BIT;
 }
 
 #define SBC_A_R(reg)\
 static void sbc_a_##reg(GameBoy * const gb) {\
-    uint8_t initial = gb->processor.a;\
-    uint8_t car = (gb->processor.f & PROCESSOR_CARRY_BIT) != 0;\
+    uint8_t initial = gb->processor->a;\
+    uint8_t car = (gb->processor->f & PROCESSOR_CARRY_BIT) != 0;\
 \
-    gb->processor.a = initial - gb->processor.reg - car;\
+    gb->processor->a = initial - gb->processor->reg - car;\
 \
-    gb->processor.f = PROCESSOR_NEGATIVE_BIT;\
-    if ((initial & 0x0F) < (gb->processor.reg & 0x0F) + car) gb->processor.f |= PROCESSOR_HALF_BIT;\
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
-    if (((uint32_t)initial) - gb->processor.reg - car > 0xFF) gb->processor.f |= PROCESSOR_CARRY_BIT;\
+    gb->processor->f = PROCESSOR_NEGATIVE_BIT;\
+    if ((initial & 0x0F) < (gb->processor->reg & 0x0F) + car) gb->processor->f |= PROCESSOR_HALF_BIT;\
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
+    if (((uint32_t)initial) - gb->processor->reg - car > 0xFF) gb->processor->f |= PROCESSOR_CARRY_BIT;\
 }
 
 static void sbc_a_dhl(GameBoy * const gb) {
-    uint8_t initial = gb->processor.a;
-    uint8_t sub = gameboy_read(gb, gb->processor.hl);
-    uint8_t car = (gb->processor.f & PROCESSOR_CARRY_BIT) != 0;
+    uint8_t initial = gb->processor->a;
+    uint8_t sub = gameboy_read(gb, gb->processor->hl);
+    uint8_t car = (gb->processor->f & PROCESSOR_CARRY_BIT) != 0;
     gameboy_cycle(gb);
 
-    gb->processor.a = initial - sub - car;
+    gb->processor->a = initial - sub - car;
 
-    gb->processor.f = PROCESSOR_NEGATIVE_BIT;
-    if ((initial & 0x0F) < (sub & 0x0F) + car) gb->processor.f |= PROCESSOR_HALF_BIT;
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
-    if (((uint32_t)initial) - sub - car > 0xFF) gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f = PROCESSOR_NEGATIVE_BIT;
+    if ((initial & 0x0F) < (sub & 0x0F) + car) gb->processor->f |= PROCESSOR_HALF_BIT;
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
+    if (((uint32_t)initial) - sub - car > 0xFF) gb->processor->f |= PROCESSOR_CARRY_BIT;
 }
 
 static void sbc_a_d8(GameBoy * const gb) {
-    uint8_t initial = gb->processor.a;
-    uint8_t sub = gameboy_read(gb, gb->processor.pc++);
-    uint8_t car = (gb->processor.f & PROCESSOR_CARRY_BIT) != 0;
+    uint8_t initial = gb->processor->a;
+    uint8_t sub = gameboy_read(gb, gb->processor->pc++);
+    uint8_t car = (gb->processor->f & PROCESSOR_CARRY_BIT) != 0;
     gameboy_cycle(gb);
 
-    gb->processor.a = initial - sub - car;
+    gb->processor->a = initial - sub - car;
 
-    gb->processor.f = PROCESSOR_NEGATIVE_BIT;
-    if ((initial & 0x0F) < (sub & 0x0F) + car) gb->processor.f |= PROCESSOR_HALF_BIT;
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
-    if (((uint32_t)initial) - sub - car > 0xFF) gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f = PROCESSOR_NEGATIVE_BIT;
+    if ((initial & 0x0F) < (sub & 0x0F) + car) gb->processor->f |= PROCESSOR_HALF_BIT;
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
+    if (((uint32_t)initial) - sub - car > 0xFF) gb->processor->f |= PROCESSOR_CARRY_BIT;
 }
 
 #define AND_A_R(reg)\
 static void and_a_##reg(GameBoy * const gb) {\
-    gb->processor.a &= gb->processor.reg;\
+    gb->processor->a &= gb->processor->reg;\
 \
-    gb->processor.f = PROCESSOR_HALF_BIT;\
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    gb->processor->f = PROCESSOR_HALF_BIT;\
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
 }
 
 static void and_a_dhl(GameBoy * const gb) {
-    gb->processor.a &= gameboy_read(gb, gb->processor.hl);
+    gb->processor->a &= gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
 
-    gb->processor.f = PROCESSOR_HALF_BIT;
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    gb->processor->f = PROCESSOR_HALF_BIT;
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 static void and_a_d8(GameBoy * const gb) {
-    gb->processor.a &= gameboy_read(gb, gb->processor.pc);
-    gb->processor.pc += 1;
+    gb->processor->a &= gameboy_read(gb, gb->processor->pc);
+    gb->processor->pc += 1;
     gameboy_cycle(gb);
 
-    gb->processor.f = PROCESSOR_HALF_BIT;
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    gb->processor->f = PROCESSOR_HALF_BIT;
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 #define XOR_A_R(reg)\
 static void xor_a_##reg(GameBoy * const gb) {\
-    gb->processor.a ^= gb->processor.reg;\
+    gb->processor->a ^= gb->processor->reg;\
 \
-    gb->processor.f = 0x00;\
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    gb->processor->f = 0x00;\
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
 }
 
 static void xor_a_dhl(GameBoy * const gb) {
-    gb->processor.a ^= gameboy_read(gb, gb->processor.hl);
+    gb->processor->a ^= gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
 
-    gb->processor.f = 0x00;
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    gb->processor->f = 0x00;
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 static void xor_a_d8(GameBoy * const gb) {
-    gb->processor.a ^= gameboy_read(gb, gb->processor.pc);
-    gb->processor.pc += 1;
+    gb->processor->a ^= gameboy_read(gb, gb->processor->pc);
+    gb->processor->pc += 1;
     gameboy_cycle(gb);
 
-    gb->processor.f = 0x00;
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    gb->processor->f = 0x00;
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 #define OR_A_R(reg)\
 static void or_a_##reg(GameBoy * const gb) {\
-    gb->processor.a |= gb->processor.reg;\
+    gb->processor->a |= gb->processor->reg;\
 \
-    gb->processor.f = 0x00;\
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    gb->processor->f = 0x00;\
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
 }
 
 static void or_a_dhl(GameBoy * const gb) {
-    gb->processor.a |= gameboy_read(gb, gb->processor.hl);
+    gb->processor->a |= gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
 
-    gb->processor.f = 0x00;
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    gb->processor->f = 0x00;
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 static void or_a_d8(GameBoy * const gb) {
-    gb->processor.a |= gameboy_read(gb, gb->processor.pc);
-    gb->processor.pc += 1;
+    gb->processor->a |= gameboy_read(gb, gb->processor->pc);
+    gb->processor->pc += 1;
     gameboy_cycle(gb);
 
-    gb->processor.f = 0x00;
-    if (gb->processor.a == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    gb->processor->f = 0x00;
+    if (gb->processor->a == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 #define CP_A_R(reg)\
 static void cp_a_##reg(GameBoy * const gb) {\
-    gb->processor.f = PROCESSOR_NEGATIVE_BIT;\
+    gb->processor->f = PROCESSOR_NEGATIVE_BIT;\
 \
-    if ((gb->processor.a & 0x0F) < (gb->processor.reg & 0x0F)) gb->processor.f |= PROCESSOR_HALF_BIT;\
-    if (gb->processor.a == gb->processor.reg) gb->processor.f |= PROCESSOR_ZERO_BIT;\
-    if (gb->processor.a < gb->processor.reg) gb->processor.f |= PROCESSOR_CARRY_BIT;\
+    if ((gb->processor->a & 0x0F) < (gb->processor->reg & 0x0F)) gb->processor->f |= PROCESSOR_HALF_BIT;\
+    if (gb->processor->a == gb->processor->reg) gb->processor->f |= PROCESSOR_ZERO_BIT;\
+    if (gb->processor->a < gb->processor->reg) gb->processor->f |= PROCESSOR_CARRY_BIT;\
 }
 
 static void cp_a_dhl(GameBoy * const gb) {
-    uint8_t num = gameboy_read(gb, gb->processor.hl);
+    uint8_t num = gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
 
-    gb->processor.f = PROCESSOR_NEGATIVE_BIT;
-    if ((gb->processor.a & 0x0F) < (num & 0x0F)) gb->processor.f |= PROCESSOR_HALF_BIT;
-    if (gb->processor.a == num) gb->processor.f |= PROCESSOR_ZERO_BIT;
-    if (gb->processor.a < num) gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f = PROCESSOR_NEGATIVE_BIT;
+    if ((gb->processor->a & 0x0F) < (num & 0x0F)) gb->processor->f |= PROCESSOR_HALF_BIT;
+    if (gb->processor->a == num) gb->processor->f |= PROCESSOR_ZERO_BIT;
+    if (gb->processor->a < num) gb->processor->f |= PROCESSOR_CARRY_BIT;
 }
 
 static void cp_a_d8(GameBoy * const gb) {
-    uint8_t num = gameboy_read(gb, gb->processor.pc);
-    gb->processor.pc += 1;
+    uint8_t num = gameboy_read(gb, gb->processor->pc);
+    gb->processor->pc += 1;
     gameboy_cycle(gb);
 
-    gb->processor.f = PROCESSOR_NEGATIVE_BIT;
-    if ((gb->processor.a & 0x0F) < (num & 0x0F)) gb->processor.f |= PROCESSOR_HALF_BIT;
-    if (gb->processor.a == num) gb->processor.f |= PROCESSOR_ZERO_BIT;
-    if (gb->processor.a < num) gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f = PROCESSOR_NEGATIVE_BIT;
+    if ((gb->processor->a & 0x0F) < (num & 0x0F)) gb->processor->f |= PROCESSOR_HALF_BIT;
+    if (gb->processor->a == num) gb->processor->f |= PROCESSOR_ZERO_BIT;
+    if (gb->processor->a < num) gb->processor->f |= PROCESSOR_CARRY_BIT;
 }
 
 static void inc_dhl(GameBoy * const gb) {
-    uint8_t num = gameboy_read(gb, gb->processor.hl) + 1;
+    uint8_t num = gameboy_read(gb, gb->processor->hl) + 1;
     gameboy_cycle(gb);
-    gameboy_write(gb, gb->processor.hl, num);
+    gameboy_write(gb, gb->processor->hl, num);
     gameboy_cycle(gb);
 
-    gb->processor.f &= PROCESSOR_CARRY_BIT;
-    if ((num & 0x0F) == 0) gb->processor.f |= PROCESSOR_HALF_BIT;
-    if (num == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    gb->processor->f &= PROCESSOR_CARRY_BIT;
+    if ((num & 0x0F) == 0) gb->processor->f |= PROCESSOR_HALF_BIT;
+    if (num == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 static void dec_dhl(GameBoy * const gb) {
-    uint8_t num = gameboy_read(gb, gb->processor.hl) - 1;
+    uint8_t num = gameboy_read(gb, gb->processor->hl) - 1;
     gameboy_cycle(gb);
-    gameboy_write(gb, gb->processor.hl, num);
+    gameboy_write(gb, gb->processor->hl, num);
     gameboy_cycle(gb);
 
-    gb->processor.f &= PROCESSOR_CARRY_BIT;
-    gb->processor.f |= PROCESSOR_NEGATIVE_BIT;
-    if ((num & 0x0F) == 0x0F) gb->processor.f |= PROCESSOR_HALF_BIT;
-    if (num == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    gb->processor->f &= PROCESSOR_CARRY_BIT;
+    gb->processor->f |= PROCESSOR_NEGATIVE_BIT;
+    if ((num & 0x0F) == 0x0F) gb->processor->f |= PROCESSOR_HALF_BIT;
+    if (num == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 #define INC_RR(reg)\
 static void inc_##reg(GameBoy * const gb) {\
-    gb->processor.reg += 1;\
+    gb->processor->reg += 1;\
     gameboy_cycle(gb);\
 }
 
 #define DEC_RR(reg)\
 static void dec_##reg(GameBoy * const gb) {\
-    gb->processor.reg -= 1;\
+    gb->processor->reg -= 1;\
     gameboy_cycle(gb);\
 }
 
 #define ADD_HL_RR(reg)\
 static void add_hl_##reg(GameBoy * const gb) {\
-    uint16_t initial = gb->processor.hl;\
-    uint16_t add = gb->processor.reg;\
+    uint16_t initial = gb->processor->hl;\
+    uint16_t add = gb->processor->reg;\
     gameboy_cycle(gb);\
 \
-    gb->processor.hl += add;\
+    gb->processor->hl += add;\
 \
-    gb->processor.f &= PROCESSOR_ZERO_BIT;\
-    if (((initial & 0x0FFF) + (add & 0x0FFF)) & 0x1000) gb->processor.f |= PROCESSOR_HALF_BIT;\
-    if (((uint32_t)initial) + ((uint32_t)add) & 0x10000) gb->processor.f |= PROCESSOR_CARRY_BIT;\
+    gb->processor->f &= PROCESSOR_ZERO_BIT;\
+    if (((initial & 0x0FFF) + (add & 0x0FFF)) & 0x1000) gb->processor->f |= PROCESSOR_HALF_BIT;\
+    if (((uint32_t)initial) + ((uint32_t)add) & 0x10000) gb->processor->f |= PROCESSOR_CARRY_BIT;\
 }
 
 static void add_sp_r8(GameBoy * const gb) {
-    uint16_t initial = gb->processor.sp;
-    int8_t add = gameboy_read(gb, gb->processor.pc++);
+    uint16_t initial = gb->processor->sp;
+    int8_t add = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
     gameboy_cycle(gb);
     gameboy_cycle(gb);
 
-    gb->processor.sp += add;
+    gb->processor->sp += add;
 
-    gb->processor.f = 0;
-    if (((initial & 0x000F) + (add & 0x000F)) > 0x000F) gb->processor.f |= PROCESSOR_HALF_BIT;
-    if (((initial & 0x00FF) + (add & 0x00FF)) > 0x00FF) gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f = 0;
+    if (((initial & 0x000F) + (add & 0x000F)) > 0x000F) gb->processor->f |= PROCESSOR_HALF_BIT;
+    if (((initial & 0x00FF) + (add & 0x00FF)) > 0x00FF) gb->processor->f |= PROCESSOR_CARRY_BIT;
 }
 
 static void ld_hl_sp_r8(GameBoy * const gb) {
-    uint16_t initial = gb->processor.sp;
-    int8_t add = gameboy_read(gb, gb->processor.pc++);
+    uint16_t initial = gb->processor->sp;
+    int8_t add = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
     gameboy_cycle(gb);
 
-    gb->processor.hl = initial + add;
+    gb->processor->hl = initial + add;
 
-    gb->processor.f = 0;
-    if (((initial & 0x000F) + (add & 0x000F)) > 0x000F) gb->processor.f |= PROCESSOR_HALF_BIT;
-    if (((initial & 0x00FF) + (add & 0x00FF)) > 0x00FF) gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f = 0;
+    if (((initial & 0x000F) + (add & 0x000F)) > 0x000F) gb->processor->f |= PROCESSOR_HALF_BIT;
+    if (((initial & 0x00FF) + (add & 0x00FF)) > 0x00FF) gb->processor->f |= PROCESSOR_CARRY_BIT;
 }
 
 static void jp_a16(GameBoy * const gb) {
-    uint16_t val = gameboy_read(gb, gb->processor.pc++);
+    uint16_t val = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    val |= (gameboy_read(gb, gb->processor.pc++) << 8);
+    val |= (gameboy_read(gb, gb->processor->pc++) << 8);
     gameboy_cycle(gb);
     gameboy_cycle(gb);
 
-    gb->processor.pc = val;
+    gb->processor->pc = val;
 }
 
 static void jp_hl(GameBoy * const gb) {
-    gb->processor.pc = gb->processor.hl;
+    gb->processor->pc = gb->processor->hl;
 }
 
 static void jp_nz_a16(GameBoy * const gb) {
-    uint16_t val = gameboy_read(gb, gb->processor.pc++);
+    uint16_t val = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    val |= (gameboy_read(gb, gb->processor.pc++) << 8);
+    val |= (gameboy_read(gb, gb->processor->pc++) << 8);
     gameboy_cycle(gb);
 
-    if ((gb->processor.f & PROCESSOR_ZERO_BIT) == 0) {
-        gb->processor.pc = val;
+    if ((gb->processor->f & PROCESSOR_ZERO_BIT) == 0) {
+        gb->processor->pc = val;
         gameboy_cycle(gb);
     }
 }
 
 static void jp_z_a16(GameBoy * const gb) {
-    uint16_t val = gameboy_read(gb, gb->processor.pc++);
+    uint16_t val = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    val |= (gameboy_read(gb, gb->processor.pc++) << 8);
+    val |= (gameboy_read(gb, gb->processor->pc++) << 8);
     gameboy_cycle(gb);
 
-    if ((gb->processor.f & PROCESSOR_ZERO_BIT) != 0) {
-        gb->processor.pc = val;
+    if ((gb->processor->f & PROCESSOR_ZERO_BIT) != 0) {
+        gb->processor->pc = val;
         gameboy_cycle(gb);
     }
 }
 
 static void jp_nc_a16(GameBoy * const gb) {
-    uint16_t val = gameboy_read(gb, gb->processor.pc++);
+    uint16_t val = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    val |= (gameboy_read(gb, gb->processor.pc++) << 8);
+    val |= (gameboy_read(gb, gb->processor->pc++) << 8);
     gameboy_cycle(gb);
 
-    if ((gb->processor.f & PROCESSOR_CARRY_BIT) == 0) {
-        gb->processor.pc = val;
+    if ((gb->processor->f & PROCESSOR_CARRY_BIT) == 0) {
+        gb->processor->pc = val;
         gameboy_cycle(gb);
     }
 }
 
 static void jp_c_a16(GameBoy * const gb) {
-    uint16_t val = gameboy_read(gb, gb->processor.pc++);
+    uint16_t val = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    val |= (gameboy_read(gb, gb->processor.pc++) << 8);
+    val |= (gameboy_read(gb, gb->processor->pc++) << 8);
     gameboy_cycle(gb);
 
-    if ((gb->processor.f & PROCESSOR_CARRY_BIT) != 0) {
-        gb->processor.pc = val;
+    if ((gb->processor->f & PROCESSOR_CARRY_BIT) != 0) {
+        gb->processor->pc = val;
         gameboy_cycle(gb);
     }
 }
 
 static void jr_r8(GameBoy * const gb) {
-    int8_t jump = gameboy_read(gb, gb->processor.pc++);
+    int8_t jump = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    gb->processor.pc += jump;
+    gb->processor->pc += jump;
     gameboy_cycle(gb);
 }
 
 static void jr_nz_r8(GameBoy * const gb) {
-    int8_t jump = gameboy_read(gb, gb->processor.pc++);
+    int8_t jump = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    if ((gb->processor.f & PROCESSOR_ZERO_BIT) == 0) {
-        gb->processor.pc += jump;
+    if ((gb->processor->f & PROCESSOR_ZERO_BIT) == 0) {
+        gb->processor->pc += jump;
         gameboy_cycle(gb);
     }
 }
 
 static void jr_z_r8(GameBoy * const gb) {
-    int8_t jump = gameboy_read(gb, gb->processor.pc++);
+    int8_t jump = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    if ((gb->processor.f & PROCESSOR_ZERO_BIT) != 0) {
-        gb->processor.pc += jump;
+    if ((gb->processor->f & PROCESSOR_ZERO_BIT) != 0) {
+        gb->processor->pc += jump;
         gameboy_cycle(gb);
     }
 }
 
 static void jr_nc_r8(GameBoy * const gb) {
-    int8_t jump = gameboy_read(gb, gb->processor.pc++);
+    int8_t jump = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    if ((gb->processor.f & PROCESSOR_CARRY_BIT) == 0) {
-        gb->processor.pc += jump;
+    if ((gb->processor->f & PROCESSOR_CARRY_BIT) == 0) {
+        gb->processor->pc += jump;
         gameboy_cycle(gb);
     }
 }
 
 static void jr_c_r8(GameBoy * const gb) {
-    int8_t jump = gameboy_read(gb, gb->processor.pc++);
+    int8_t jump = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    if ((gb->processor.f & PROCESSOR_CARRY_BIT) != 0) {
-        gb->processor.pc += jump;
+    if ((gb->processor->f & PROCESSOR_CARRY_BIT) != 0) {
+        gb->processor->pc += jump;
         gameboy_cycle(gb);
     }
 }
 
 static void call_a16(GameBoy * const gb) {
-    uint16_t val = gameboy_read(gb, gb->processor.pc++);
+    uint16_t val = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    val |= (gameboy_read(gb, gb->processor.pc++) << 8);
+    val |= (gameboy_read(gb, gb->processor->pc++) << 8);
     gameboy_cycle(gb);
     gameboy_cycle(gb); // Delay
-    gameboy_write(gb, --gb->processor.sp, gb->processor.pc >> 8);
+    gameboy_write(gb, --gb->processor->sp, gb->processor->pc >> 8);
     gameboy_cycle(gb);
-    gameboy_write(gb, --gb->processor.sp, gb->processor.pc & 0xFF);
+    gameboy_write(gb, --gb->processor->sp, gb->processor->pc & 0xFF);
     gameboy_cycle(gb);
-    gb->processor.pc = val;
+    gb->processor->pc = val;
 }
 
 static void call_nz_a16(GameBoy * const gb) {
-    uint16_t val = gameboy_read(gb, gb->processor.pc++);
+    uint16_t val = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    val |= (gameboy_read(gb, gb->processor.pc++) << 8);
+    val |= (gameboy_read(gb, gb->processor->pc++) << 8);
     gameboy_cycle(gb);
 
-    if ((gb->processor.f & PROCESSOR_ZERO_BIT) == 0) {
+    if ((gb->processor->f & PROCESSOR_ZERO_BIT) == 0) {
         gameboy_cycle(gb); // Delay
-        gameboy_write(gb, --gb->processor.sp, gb->processor.pc >> 8);
+        gameboy_write(gb, --gb->processor->sp, gb->processor->pc >> 8);
         gameboy_cycle(gb);
-        gameboy_write(gb, --gb->processor.sp, gb->processor.pc & 0xFF);
+        gameboy_write(gb, --gb->processor->sp, gb->processor->pc & 0xFF);
         gameboy_cycle(gb);
-        gb->processor.pc = val;
+        gb->processor->pc = val;
     }
 }
 
 static void call_z_a16(GameBoy * const gb) {
-    uint16_t val = gameboy_read(gb, gb->processor.pc++);
+    uint16_t val = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    val |= (gameboy_read(gb, gb->processor.pc++) << 8);
+    val |= (gameboy_read(gb, gb->processor->pc++) << 8);
     gameboy_cycle(gb);
 
-    if ((gb->processor.f & PROCESSOR_ZERO_BIT) != 0) {
+    if ((gb->processor->f & PROCESSOR_ZERO_BIT) != 0) {
         gameboy_cycle(gb); // Delay
-        gameboy_write(gb, --gb->processor.sp, gb->processor.pc >> 8);
+        gameboy_write(gb, --gb->processor->sp, gb->processor->pc >> 8);
         gameboy_cycle(gb);
-        gameboy_write(gb, --gb->processor.sp, gb->processor.pc & 0xFF);
+        gameboy_write(gb, --gb->processor->sp, gb->processor->pc & 0xFF);
         gameboy_cycle(gb);
-        gb->processor.pc = val;
+        gb->processor->pc = val;
     }
 }
 
 static void call_nc_a16(GameBoy * const gb) {
-    uint16_t val = gameboy_read(gb, gb->processor.pc++);
+    uint16_t val = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    val |= (gameboy_read(gb, gb->processor.pc++) << 8);
+    val |= (gameboy_read(gb, gb->processor->pc++) << 8);
     gameboy_cycle(gb);
 
-    if ((gb->processor.f & PROCESSOR_CARRY_BIT) == 0) {
+    if ((gb->processor->f & PROCESSOR_CARRY_BIT) == 0) {
         gameboy_cycle(gb); // Delay
-        gameboy_write(gb, --gb->processor.sp, gb->processor.pc >> 8);
+        gameboy_write(gb, --gb->processor->sp, gb->processor->pc >> 8);
         gameboy_cycle(gb);
-        gameboy_write(gb, --gb->processor.sp, gb->processor.pc & 0xFF);
+        gameboy_write(gb, --gb->processor->sp, gb->processor->pc & 0xFF);
         gameboy_cycle(gb);
-        gb->processor.pc = val;
+        gb->processor->pc = val;
     }
 }
 
 static void call_c_a16(GameBoy * const gb) {
-    uint16_t val = gameboy_read(gb, gb->processor.pc++);
+    uint16_t val = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
-    val |= (gameboy_read(gb, gb->processor.pc++) << 8);
+    val |= (gameboy_read(gb, gb->processor->pc++) << 8);
     gameboy_cycle(gb);
 
-    if ((gb->processor.f & PROCESSOR_CARRY_BIT) != 0) {
+    if ((gb->processor->f & PROCESSOR_CARRY_BIT) != 0) {
         gameboy_cycle(gb); // Delay
-        gameboy_write(gb, --gb->processor.sp, gb->processor.pc >> 8);
+        gameboy_write(gb, --gb->processor->sp, gb->processor->pc >> 8);
         gameboy_cycle(gb);
-        gameboy_write(gb, --gb->processor.sp, gb->processor.pc & 0xFF);
+        gameboy_write(gb, --gb->processor->sp, gb->processor->pc & 0xFF);
         gameboy_cycle(gb);
-        gb->processor.pc = val;
+        gb->processor->pc = val;
     }
 }
 
 static void ret(GameBoy * const gb) {
-    uint16_t val = gameboy_read(gb, gb->processor.sp++);
+    uint16_t val = gameboy_read(gb, gb->processor->sp++);
     gameboy_cycle(gb);
-    val |= (gameboy_read(gb, gb->processor.sp++) << 8);
+    val |= (gameboy_read(gb, gb->processor->sp++) << 8);
     gameboy_cycle(gb);
-    gb->processor.pc = val;
+    gb->processor->pc = val;
     gameboy_cycle(gb); // Delay
 }
 
 static void ret_nz(GameBoy * const gb) {
-    if ((gb->processor.f & PROCESSOR_ZERO_BIT) == 0) {
+    if ((gb->processor->f & PROCESSOR_ZERO_BIT) == 0) {
         gameboy_cycle(gb); //Delay
-        uint16_t val = gameboy_read(gb, gb->processor.sp++);
+        uint16_t val = gameboy_read(gb, gb->processor->sp++);
         gameboy_cycle(gb);
-        val |= (gameboy_read(gb, gb->processor.sp++) << 8);
+        val |= (gameboy_read(gb, gb->processor->sp++) << 8);
         gameboy_cycle(gb);
-        gb->processor.pc = val;
+        gb->processor->pc = val;
     }
     gameboy_cycle(gb); // Delay
 }
 
 static void ret_z(GameBoy * const gb) {
-    if ((gb->processor.f & PROCESSOR_ZERO_BIT) != 0) {
+    if ((gb->processor->f & PROCESSOR_ZERO_BIT) != 0) {
         gameboy_cycle(gb); //Delay
-        uint16_t val = gameboy_read(gb, gb->processor.sp++);
+        uint16_t val = gameboy_read(gb, gb->processor->sp++);
         gameboy_cycle(gb);
-        val |= (gameboy_read(gb, gb->processor.sp++) << 8);
+        val |= (gameboy_read(gb, gb->processor->sp++) << 8);
         gameboy_cycle(gb);
-        gb->processor.pc = val;
+        gb->processor->pc = val;
     }
     gameboy_cycle(gb); // Delay
 }
 
 static void ret_nc(GameBoy * const gb) {
-    if ((gb->processor.f & PROCESSOR_CARRY_BIT) == 0) {
+    if ((gb->processor->f & PROCESSOR_CARRY_BIT) == 0) {
         gameboy_cycle(gb); //Delay
-        uint16_t val = gameboy_read(gb, gb->processor.sp++);
+        uint16_t val = gameboy_read(gb, gb->processor->sp++);
         gameboy_cycle(gb);
-        val |= (gameboy_read(gb, gb->processor.sp++) << 8);
+        val |= (gameboy_read(gb, gb->processor->sp++) << 8);
         gameboy_cycle(gb);
-        gb->processor.pc = val;
+        gb->processor->pc = val;
     }
     gameboy_cycle(gb); // Delay
 }
 
 static void ret_c(GameBoy * const gb) {
-    if ((gb->processor.f & PROCESSOR_CARRY_BIT) != 0) {
+    if ((gb->processor->f & PROCESSOR_CARRY_BIT) != 0) {
         gameboy_cycle(gb); //Delay
-        uint16_t val = gameboy_read(gb, gb->processor.sp++);
+        uint16_t val = gameboy_read(gb, gb->processor->sp++);
         gameboy_cycle(gb);
-        val |= (gameboy_read(gb, gb->processor.sp++) << 8);
+        val |= (gameboy_read(gb, gb->processor->sp++) << 8);
         gameboy_cycle(gb);
-        gb->processor.pc = val;
+        gb->processor->pc = val;
     }
     gameboy_cycle(gb); // Delay
 }
 
 static void reti(GameBoy * const gb) {
-    uint16_t val = gameboy_read(gb, gb->processor.sp++);
+    uint16_t val = gameboy_read(gb, gb->processor->sp++);
     gameboy_cycle(gb);
-    val |= (gameboy_read(gb, gb->processor.sp++) << 8);
+    val |= (gameboy_read(gb, gb->processor->sp++) << 8);
     gameboy_cycle(gb);
-    gb->processor.pc = val;
-    gb->interrupt_controller.ime = true;
+    gb->processor->pc = val;
+    gb->interrupt_controller->ime = true;
     gameboy_cycle(gb); // Delay
 }
 
 #define RST_NNH(value)\
 static void rst_##value##h(GameBoy * const gb) {\
     gameboy_cycle(gb);\
-    gameboy_write(gb, --gb->processor.sp, gb->processor.pc >> 8);\
+    gameboy_write(gb, --gb->processor->sp, gb->processor->pc >> 8);\
     gameboy_cycle(gb);\
-    gameboy_write(gb, --gb->processor.sp, gb->processor.pc & 0x00FF);\
+    gameboy_write(gb, --gb->processor->sp, gb->processor->pc & 0x00FF);\
     gameboy_cycle(gb);\
 \
-    gb->processor.pc = 0x00##value;\
+    gb->processor->pc = 0x00##value;\
 }
 
 static void halt(GameBoy * const gb) {
-    if (gb->interrupt_controller.ime == 0) {
+    if (gb->interrupt_controller->ime == 0) {
         uint8_t interrupt_flags = gameboy_read(gb, INTERRUPT_FLAGS_ADDRESS);
         uint8_t interrupt_enables = gameboy_read(gb, INTERRUPT_ENABLE_ADDRESS);
-        if ((interrupt_flags & interrupt_enables & 0x1F) == 0) gb->processor.skip_next_interrupt = true;
+        if ((interrupt_flags & interrupt_enables & 0x1F) == 0) gb->processor->skip_next_interrupt = true;
         else {
-            gb->processor.skip_pc_increment = true;
+            gb->processor->skip_pc_increment = true;
             return;
         }
     }
-    gb->processor.halt_mode = true;
+    gb->processor->halt_mode = true;
 }
 
 static void stop(GameBoy * const gb) {
@@ -829,23 +839,23 @@ static void stop(GameBoy * const gb) {
 }
 
 static void di(GameBoy * const gb) {
-    gb->interrupt_controller.ime = false;
+    gb->interrupt_controller->ime = false;
 }
 
 static void ei(GameBoy * const gb) {
-    if (gb->interrupt_controller.ime == false) gb->interrupt_controller.cycles_until_ime = 1;
+    if (gb->interrupt_controller->ime == false) gb->interrupt_controller->cycles_until_ime = 1;
 }
 
 static void ccf(GameBoy * const gb) {
-    uint8_t zero_bit = gb->processor.f & PROCESSOR_ZERO_BIT;
-    gb->processor.f ^= PROCESSOR_CARRY_BIT;
-    gb->processor.f &= PROCESSOR_CARRY_BIT;
-    gb->processor.f |= zero_bit;
+    uint8_t zero_bit = gb->processor->f & PROCESSOR_ZERO_BIT;
+    gb->processor->f ^= PROCESSOR_CARRY_BIT;
+    gb->processor->f &= PROCESSOR_CARRY_BIT;
+    gb->processor->f |= zero_bit;
 }
 
 static void scf(GameBoy * const gb) {
-    gb->processor.f &= PROCESSOR_ZERO_BIT;
-    gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f &= PROCESSOR_ZERO_BIT;
+    gb->processor->f |= PROCESSOR_CARRY_BIT;
 }
 
 static void nop(GameBoy * const gb) {}
@@ -855,281 +865,281 @@ static void inv_op(GameBoy * const gb) {
 }
 
 static void daa(GameBoy * const gb) {
-    if ((gb->processor.f & PROCESSOR_NEGATIVE_BIT) == 0) {
-        if ((gb->processor.f & PROCESSOR_CARRY_BIT) != 0 || gb->processor.a > 0x99) {
-            gb->processor.a += 0x60;
-            gb->processor.f |= PROCESSOR_CARRY_BIT;
+    if ((gb->processor->f & PROCESSOR_NEGATIVE_BIT) == 0) {
+        if ((gb->processor->f & PROCESSOR_CARRY_BIT) != 0 || gb->processor->a > 0x99) {
+            gb->processor->a += 0x60;
+            gb->processor->f |= PROCESSOR_CARRY_BIT;
         }
-        if ((gb->processor.f & PROCESSOR_HALF_BIT) != 0 || (gb->processor.a & 0x0f) > 0x09) {
-            gb->processor.a += 0x6;
+        if ((gb->processor->f & PROCESSOR_HALF_BIT) != 0 || (gb->processor->a & 0x0f) > 0x09) {
+            gb->processor->a += 0x6;
         }
     }
     else {
-        if ((gb->processor.f & PROCESSOR_CARRY_BIT) != 0) gb->processor.a -= 0x60;
-        if ((gb->processor.f & PROCESSOR_HALF_BIT) != 0) gb->processor.a -= 0x6;
+        if ((gb->processor->f & PROCESSOR_CARRY_BIT) != 0) gb->processor->a -= 0x60;
+        if ((gb->processor->f & PROCESSOR_HALF_BIT) != 0) gb->processor->a -= 0x6;
     }
-    gb->processor.f ^= (-(gb->processor.a == 0) ^ gb->processor.f) & PROCESSOR_ZERO_BIT;
-    gb->processor.f &= ~PROCESSOR_HALF_BIT;
+    gb->processor->f ^= (-(gb->processor->a == 0) ^ gb->processor->f) & PROCESSOR_ZERO_BIT;
+    gb->processor->f &= ~PROCESSOR_HALF_BIT;
 }
 
 static void cpl(GameBoy * const gb) {
-    gb->processor.a ^= 0xFF;
-    gb->processor.f |= PROCESSOR_NEGATIVE_BIT | PROCESSOR_HALF_BIT;
+    gb->processor->a ^= 0xFF;
+    gb->processor->f |= PROCESSOR_NEGATIVE_BIT | PROCESSOR_HALF_BIT;
 }
 
 static void rlca(GameBoy * const gb) {
-    uint8_t car = (gb->processor.a & 0x80) != 0;
-    gb->processor.f = 0;
-    gb->processor.a <<= 1;
+    uint8_t car = (gb->processor->a & 0x80) != 0;
+    gb->processor->f = 0;
+    gb->processor->a <<= 1;
     if (car) {
-        gb->processor.f |= PROCESSOR_CARRY_BIT;
-        gb->processor.a |= 0x01;
+        gb->processor->f |= PROCESSOR_CARRY_BIT;
+        gb->processor->a |= 0x01;
     }
 }
 
 static void rrca(GameBoy * const gb) {
-    uint8_t car = (gb->processor.a & 0x01) != 0;
-    gb->processor.f = 0;
-    gb->processor.a >>= 1;
+    uint8_t car = (gb->processor->a & 0x01) != 0;
+    gb->processor->f = 0;
+    gb->processor->a >>= 1;
     if (car) {
-        gb->processor.f |= PROCESSOR_CARRY_BIT;
-        gb->processor.a |= 0x80;
+        gb->processor->f |= PROCESSOR_CARRY_BIT;
+        gb->processor->a |= 0x80;
     }
 }
 
 static void rla(GameBoy * const gb) {
-    uint8_t top = (gb->processor.a & 0x80) != 0;
-    uint8_t car = (gb->processor.f & PROCESSOR_CARRY_BIT) != 0;
-    gb->processor.f = 0;
-    gb->processor.a <<= 1;
-    if (top) gb->processor.f |= PROCESSOR_CARRY_BIT;
-    if (car) gb->processor.a |= 0x01;
+    uint8_t top = (gb->processor->a & 0x80) != 0;
+    uint8_t car = (gb->processor->f & PROCESSOR_CARRY_BIT) != 0;
+    gb->processor->f = 0;
+    gb->processor->a <<= 1;
+    if (top) gb->processor->f |= PROCESSOR_CARRY_BIT;
+    if (car) gb->processor->a |= 0x01;
 }
 
 static void rra(GameBoy * const gb) {
-    uint8_t bot = (gb->processor.a & 0x01) != 0;
-    uint8_t car = (gb->processor.f & PROCESSOR_CARRY_BIT) != 0;
-    gb->processor.f = 0;
-    gb->processor.a >>= 1;
-    if (bot) gb->processor.f |= PROCESSOR_CARRY_BIT;
-    if (car) gb->processor.a |= 0x80;
+    uint8_t bot = (gb->processor->a & 0x01) != 0;
+    uint8_t car = (gb->processor->f & PROCESSOR_CARRY_BIT) != 0;
+    gb->processor->f = 0;
+    gb->processor->a >>= 1;
+    if (bot) gb->processor->f |= PROCESSOR_CARRY_BIT;
+    if (car) gb->processor->a |= 0x80;
 }
 
 #define RLC_R(reg)\
 static void rlc_##reg(GameBoy * const gb) {\
-    uint8_t car = (gb->processor.reg & 0x80) != 0;\
-    gb->processor.reg = (gb->processor.reg << 1) | car;\
+    uint8_t car = (gb->processor->reg & 0x80) != 0;\
+    gb->processor->reg = (gb->processor->reg << 1) | car;\
 \
-    gb->processor.f = 0;\
-    if (car) gb->processor.f |= PROCESSOR_CARRY_BIT;\
-    if (gb->processor.reg == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    gb->processor->f = 0;\
+    if (car) gb->processor->f |= PROCESSOR_CARRY_BIT;\
+    if (gb->processor->reg == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
 }
 
 static void rlc_dhl(GameBoy * const gb) {
-    uint8_t val = gameboy_read(gb, gb->processor.hl);
+    uint8_t val = gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
     uint8_t car = (val & 0x80) != 0;
     val = (val << 1) | car;
-    gameboy_write(gb, gb->processor.hl, val);
+    gameboy_write(gb, gb->processor->hl, val);
     gameboy_cycle(gb);
 
-    gb->processor.f = 0;
-    if (car) gb->processor.f |= PROCESSOR_CARRY_BIT;
-    if (val == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    gb->processor->f = 0;
+    if (car) gb->processor->f |= PROCESSOR_CARRY_BIT;
+    if (val == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 #define RRC_R(reg)\
 static void rrc_##reg(GameBoy * const gb) {\
-    uint8_t car = (gb->processor.reg & 0x01) != 0;\
-    gb->processor.reg = (gb->processor.reg >> 1) | (car << 7);\
+    uint8_t car = (gb->processor->reg & 0x01) != 0;\
+    gb->processor->reg = (gb->processor->reg >> 1) | (car << 7);\
 \
-    gb->processor.f = 0;\
-    if (car) gb->processor.f |= PROCESSOR_CARRY_BIT;\
-    if (gb->processor.reg == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    gb->processor->f = 0;\
+    if (car) gb->processor->f |= PROCESSOR_CARRY_BIT;\
+    if (gb->processor->reg == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
 }
 
 static void rrc_dhl(GameBoy * const gb) {
-    uint8_t val = gameboy_read(gb, gb->processor.hl);
+    uint8_t val = gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
     uint8_t car = (val & 0x01) != 0;
     val = (val >> 1) | (car << 7);
-    gameboy_write(gb, gb->processor.hl, val);
+    gameboy_write(gb, gb->processor->hl, val);
     gameboy_cycle(gb);
 
-    gb->processor.f = 0;
-    if (car) gb->processor.f |= PROCESSOR_CARRY_BIT;
-    if (val == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    gb->processor->f = 0;
+    if (car) gb->processor->f |= PROCESSOR_CARRY_BIT;
+    if (val == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 #define RL_R(reg)\
 static void rl_##reg(GameBoy * const gb) {\
-    uint8_t top = (gb->processor.reg & 0x80) != 0;\
-    uint8_t car = (gb->processor.f & PROCESSOR_CARRY_BIT) != 0;\
-    gb->processor.reg = (gb->processor.reg << 1) | car;\
+    uint8_t top = (gb->processor->reg & 0x80) != 0;\
+    uint8_t car = (gb->processor->f & PROCESSOR_CARRY_BIT) != 0;\
+    gb->processor->reg = (gb->processor->reg << 1) | car;\
 \
-    gb->processor.f = 0;\
-    if (top) gb->processor.f |= PROCESSOR_CARRY_BIT;\
-    if (gb->processor.reg == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    gb->processor->f = 0;\
+    if (top) gb->processor->f |= PROCESSOR_CARRY_BIT;\
+    if (gb->processor->reg == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
 }
 
 static void rl_dhl(GameBoy * const gb) {
-    uint8_t val = gameboy_read(gb, gb->processor.hl);
+    uint8_t val = gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
     uint8_t top = (val & 0x80) != 0;
-    uint8_t car = (gb->processor.f & PROCESSOR_CARRY_BIT) != 0;
+    uint8_t car = (gb->processor->f & PROCESSOR_CARRY_BIT) != 0;
     val = (val << 1) | car;
-    gameboy_write(gb, gb->processor.hl, val);
+    gameboy_write(gb, gb->processor->hl, val);
     gameboy_cycle(gb);
 
-    gb->processor.f = 0;
-    if (top) gb->processor.f |= PROCESSOR_CARRY_BIT;
-    if (val == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    gb->processor->f = 0;
+    if (top) gb->processor->f |= PROCESSOR_CARRY_BIT;
+    if (val == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 #define RR_R(reg)\
 static void rr_##reg(GameBoy * const gb) {\
-    uint8_t bot = (gb->processor.reg & 0x01) != 0;\
-    uint8_t car = (gb->processor.f & PROCESSOR_CARRY_BIT) != 0;\
-    gb->processor.reg = (gb->processor.reg >> 1) | (car << 7);\
+    uint8_t bot = (gb->processor->reg & 0x01) != 0;\
+    uint8_t car = (gb->processor->f & PROCESSOR_CARRY_BIT) != 0;\
+    gb->processor->reg = (gb->processor->reg >> 1) | (car << 7);\
 \
-    gb->processor.f = 0;\
-    if (bot) gb->processor.f |= PROCESSOR_CARRY_BIT;\
-    if (gb->processor.reg == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    gb->processor->f = 0;\
+    if (bot) gb->processor->f |= PROCESSOR_CARRY_BIT;\
+    if (gb->processor->reg == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
 }
 
 static void rr_dhl(GameBoy * const gb) {
-    uint8_t val = gameboy_read(gb, gb->processor.hl);
+    uint8_t val = gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
     uint8_t bot = (val & 0x01) != 0;
-    uint8_t car = (gb->processor.f & PROCESSOR_CARRY_BIT) != 0;
+    uint8_t car = (gb->processor->f & PROCESSOR_CARRY_BIT) != 0;
     val = (val >> 1) | (car << 7);
-    gameboy_write(gb, gb->processor.hl, val);
+    gameboy_write(gb, gb->processor->hl, val);
     gameboy_cycle(gb);
 
-    gb->processor.f = 0;
-    if (bot) gb->processor.f |= PROCESSOR_CARRY_BIT;
-    if (val == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    gb->processor->f = 0;
+    if (bot) gb->processor->f |= PROCESSOR_CARRY_BIT;
+    if (val == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 #define SLA_R(reg)\
 static void sla_##reg(GameBoy * const gb) {\
-    uint8_t car = (gb->processor.reg & 0x80) != 0;\
-    gb->processor.reg <<= 1;\
+    uint8_t car = (gb->processor->reg & 0x80) != 0;\
+    gb->processor->reg <<= 1;\
 \
-    gb->processor.f = 0;\
-    if (car) gb->processor.f |= PROCESSOR_CARRY_BIT;\
-    if (gb->processor.reg == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    gb->processor->f = 0;\
+    if (car) gb->processor->f |= PROCESSOR_CARRY_BIT;\
+    if (gb->processor->reg == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
 }
 
 static void sla_dhl(GameBoy * const gb) {
-    uint8_t val = gameboy_read(gb, gb->processor.hl);
+    uint8_t val = gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
 
     uint8_t car = (val & 0x80) != 0;
     val <<= 1;
-    gameboy_write(gb, gb->processor.hl, val);
+    gameboy_write(gb, gb->processor->hl, val);
     gameboy_cycle(gb);
 
-    gb->processor.f = 0;
-    if (car) gb->processor.f |= PROCESSOR_CARRY_BIT;
-    if (val == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    gb->processor->f = 0;
+    if (car) gb->processor->f |= PROCESSOR_CARRY_BIT;
+    if (val == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 #define SRA_R(reg)\
 static void sra_##reg(GameBoy * const gb) {\
-    uint8_t top = gb->processor.reg & 0x80;\
-    gb->processor.f = 0;\
-    if (gb->processor.reg & 1) gb->processor.f |= PROCESSOR_CARRY_BIT;\
-    gb->processor.reg = (gb->processor.reg >> 1) | top;\
-    if (gb->processor.reg == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    uint8_t top = gb->processor->reg & 0x80;\
+    gb->processor->f = 0;\
+    if (gb->processor->reg & 1) gb->processor->f |= PROCESSOR_CARRY_BIT;\
+    gb->processor->reg = (gb->processor->reg >> 1) | top;\
+    if (gb->processor->reg == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
 }
 
 static void sra_dhl(GameBoy * const gb) {
-    uint8_t val = gameboy_read(gb, gb->processor.hl);
+    uint8_t val = gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
     uint8_t top = val & 0x80;
-    gb->processor.f = 0;
-    if (val & 1) gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f = 0;
+    if (val & 1) gb->processor->f |= PROCESSOR_CARRY_BIT;
     val = (val >> 1) | top;
-    gameboy_write(gb, gb->processor.hl, val);
+    gameboy_write(gb, gb->processor->hl, val);
     gameboy_cycle(gb);
-    if (val == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    if (val == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 #define SWAP_R(reg)\
 static void swap_##reg(GameBoy * const gb) {\
-    gb->processor.f = 0;\
-    gb->processor.reg = ((gb->processor.reg >> 4) | (gb->processor.reg << 4));\
-    if (gb->processor.reg == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    gb->processor->f = 0;\
+    gb->processor->reg = ((gb->processor->reg >> 4) | (gb->processor->reg << 4));\
+    if (gb->processor->reg == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
 }
 
 static void swap_dhl(GameBoy * const gb) {
-    uint8_t val = gameboy_read(gb, gb->processor.hl);
+    uint8_t val = gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
-    gb->processor.f = 0;
+    gb->processor->f = 0;
     val = ((val >> 4) | (val << 4));
-    gameboy_write(gb, gb->processor.hl, val);
+    gameboy_write(gb, gb->processor->hl, val);
     gameboy_cycle(gb);
-    if (val == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    if (val == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 #define SRL_R(reg)\
 static void srl_##reg(GameBoy * const gb) {\
-    gb->processor.f = 0;\
-    if (gb->processor.reg & 1) gb->processor.f |= PROCESSOR_CARRY_BIT;\
-    gb->processor.reg >>= 1;\
-    if (gb->processor.reg == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    gb->processor->f = 0;\
+    if (gb->processor->reg & 1) gb->processor->f |= PROCESSOR_CARRY_BIT;\
+    gb->processor->reg >>= 1;\
+    if (gb->processor->reg == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
 }
 
 static void srl_dhl(GameBoy * const gb) {
-    uint8_t val = gameboy_read(gb, gb->processor.hl);
+    uint8_t val = gameboy_read(gb, gb->processor->hl);
     gameboy_cycle(gb);
-    gb->processor.f = 0;
-    if (val & 1) gb->processor.f |= PROCESSOR_CARRY_BIT;
+    gb->processor->f = 0;
+    if (val & 1) gb->processor->f |= PROCESSOR_CARRY_BIT;
     val >>= 1;
-    gameboy_write(gb, gb->processor.hl, val);
+    gameboy_write(gb, gb->processor->hl, val);
     gameboy_cycle(gb);
-    if (val == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;
+    if (val == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;
 }
 
 #define BIT_N_R(num, reg)\
 static void bit_##num##_##reg(GameBoy * const gb) {\
-    gb->processor.f &= PROCESSOR_CARRY_BIT;\
-    gb->processor.f |= PROCESSOR_HALF_BIT;\
-    if (((1 << num) & gb->processor.reg) == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    gb->processor->f &= PROCESSOR_CARRY_BIT;\
+    gb->processor->f |= PROCESSOR_HALF_BIT;\
+    if (((1 << num) & gb->processor->reg) == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
 }
 
 #define BIT_N_DHL(num)\
 static void bit_##num##_dhl(GameBoy * const gb) {\
-    gb->processor.f &= PROCESSOR_CARRY_BIT;\
-    gb->processor.f |= PROCESSOR_HALF_BIT;\
-    if (((1 << num) & gameboy_read(gb, gb->processor.hl)) == 0) gb->processor.f |= PROCESSOR_ZERO_BIT;\
+    gb->processor->f &= PROCESSOR_CARRY_BIT;\
+    gb->processor->f |= PROCESSOR_HALF_BIT;\
+    if (((1 << num) & gameboy_read(gb, gb->processor->hl)) == 0) gb->processor->f |= PROCESSOR_ZERO_BIT;\
     gameboy_cycle(gb);\
 }
 
 #define RES_N_R(num, reg)\
 static void res_##num##_##reg(GameBoy * const gb) {\
-    gb->processor.reg &= ~(1 << num);\
+    gb->processor->reg &= ~(1 << num);\
 }
 
 #define RES_N_DHL(num)\
 static void res_##num##_dhl(GameBoy * const gb) {\
-    uint8_t mask = gameboy_read(gb, gb->processor.hl) & ~(1 << num);\
+    uint8_t mask = gameboy_read(gb, gb->processor->hl) & ~(1 << num);\
     gameboy_cycle(gb);\
-    gameboy_write(gb, gb->processor.hl, mask);\
+    gameboy_write(gb, gb->processor->hl, mask);\
     gameboy_cycle(gb);\
 }
 
 #define SET_N_R(num, reg)\
 static void set_##num##_##reg(GameBoy * const gb) {\
-    gb->processor.reg |= (1 << num);\
+    gb->processor->reg |= (1 << num);\
 }
 
 #define SET_N_DHL(num)\
 static void set_##num##_dhl(GameBoy * const gb) {\
-    uint8_t mask = gameboy_read(gb, gb->processor.hl) | (1 << num);\
+    uint8_t mask = gameboy_read(gb, gb->processor->hl) | (1 << num);\
     gameboy_cycle(gb);\
-    gameboy_write(gb, gb->processor.hl, mask);\
+    gameboy_write(gb, gb->processor->hl, mask);\
     gameboy_cycle(gb);\
 }
 
@@ -1208,7 +1218,7 @@ static void (*prefixed_instructions[])(GameBoy * const gb) = {
 };
 
 static void prefix_cb(GameBoy * const gb) {
-    uint8_t opcode = gameboy_read(gb, gb->processor.pc++);
+    uint8_t opcode = gameboy_read(gb, gb->processor->pc++);
     gameboy_cycle(gb);
     prefixed_instructions[opcode](gb);
 }
@@ -1298,64 +1308,64 @@ static void (*instructions[])(GameBoy * const gb) = {
 };
 
 void processor_process_instruction(GameBoy * const gb) {
-    if (gb->processor.halt_mode) {
-        uint8_t interrupts = gb->interrupt_controller.flags & gb->interrupt_controller.enables & 0x1F;
+    if (gb->processor->halt_mode) {
+        uint8_t interrupts = gb->interrupt_controller->flags & gb->interrupt_controller->enables & 0x1F;
         if (interrupts == 0) {
             gameboy_cycle(gb);
             return; // Notice this and don't reorder it
         }
-        gb->processor.halt_mode = false;
+        gb->processor->halt_mode = false;
     }
 
-    if (gb->interrupt_controller.ime && !gb->processor.skip_next_interrupt) {
-        uint8_t interrupts = gb->interrupt_controller.flags & gb->interrupt_controller.enables;
+    if (gb->interrupt_controller->ime && !gb->processor->skip_next_interrupt) {
+        uint8_t interrupts = gb->interrupt_controller->flags & gb->interrupt_controller->enables;
         if (interrupts & VBLANK_INTERRUPT_BIT) {
-            gb->interrupt_controller.ime = false;
-            gameboy_write(gb, INTERRUPT_FLAGS_ADDRESS, gb->interrupt_controller.flags & ~VBLANK_INTERRUPT_BIT);
+            gb->interrupt_controller->ime = false;
+            gameboy_write(gb, INTERRUPT_FLAGS_ADDRESS, gb->interrupt_controller->flags & ~VBLANK_INTERRUPT_BIT);
             gameboy_cycle(gb);
             rst_40h(gb);
             gameboy_cycle(gb);
         }
         else if (interrupts & LCD_STAT_INTERRUPT_BIT) {
-            gb->interrupt_controller.ime = false;
-            gameboy_write(gb, INTERRUPT_FLAGS_ADDRESS, gb->interrupt_controller.flags & ~LCD_STAT_INTERRUPT_BIT);
+            gb->interrupt_controller->ime = false;
+            gameboy_write(gb, INTERRUPT_FLAGS_ADDRESS, gb->interrupt_controller->flags & ~LCD_STAT_INTERRUPT_BIT);
             gameboy_cycle(gb);
             rst_48h(gb);
             gameboy_cycle(gb);
         }
         else if (interrupts & TIMER_INTERRUPT_BIT) {
-            gb->interrupt_controller.ime = false;
-            gameboy_write(gb, INTERRUPT_FLAGS_ADDRESS, gb->interrupt_controller.flags & ~TIMER_INTERRUPT_BIT);
+            gb->interrupt_controller->ime = false;
+            gameboy_write(gb, INTERRUPT_FLAGS_ADDRESS, gb->interrupt_controller->flags & ~TIMER_INTERRUPT_BIT);
             gameboy_cycle(gb);
             rst_50h(gb);
             gameboy_cycle(gb);
         }
         else if (interrupts & SERIAL_INTERRUPT_BIT) {
-            gb->interrupt_controller.ime = false;
-            gameboy_write(gb, INTERRUPT_FLAGS_ADDRESS, gb->interrupt_controller.flags & ~SERIAL_INTERRUPT_BIT);
+            gb->interrupt_controller->ime = false;
+            gameboy_write(gb, INTERRUPT_FLAGS_ADDRESS, gb->interrupt_controller->flags & ~SERIAL_INTERRUPT_BIT);
             gameboy_cycle(gb);
             rst_58h(gb);
             gameboy_cycle(gb);
         }
         else if (interrupts & JOYPAD_INTERRUPT_BIT) {
-            gb->interrupt_controller.ime = false;
-            gameboy_write(gb, INTERRUPT_FLAGS_ADDRESS, gb->interrupt_controller.flags & ~JOYPAD_INTERRUPT_BIT);
+            gb->interrupt_controller->ime = false;
+            gameboy_write(gb, INTERRUPT_FLAGS_ADDRESS, gb->interrupt_controller->flags & ~JOYPAD_INTERRUPT_BIT);
             gameboy_cycle(gb);
             rst_60h(gb);
             gameboy_cycle(gb);
         }
     }
-    gb->processor.skip_next_interrupt = false;
+    gb->processor->skip_next_interrupt = false;
 
-    if (gb->interrupt_controller.cycles_until_ime > 0) gb->interrupt_controller.cycles_until_ime -= 1;
-    if (gb->interrupt_controller.cycles_until_ime == 0) {
-        gb->interrupt_controller.cycles_until_ime = -1;
-        gb->interrupt_controller.ime = 1;
+    if (gb->interrupt_controller->cycles_until_ime > 0) gb->interrupt_controller->cycles_until_ime -= 1;
+    if (gb->interrupt_controller->cycles_until_ime == 0) {
+        gb->interrupt_controller->cycles_until_ime = -1;
+        gb->interrupt_controller->ime = 1;
     }
 
-    uint8_t opcode = gameboy_read(gb, gb->processor.pc);
-    if (gb->processor.skip_pc_increment) gb->processor.skip_pc_increment = false;
-    else gb->processor.pc += 1;
+    uint8_t opcode = gameboy_read(gb, gb->processor->pc);
+    if (gb->processor->skip_pc_increment) gb->processor->skip_pc_increment = false;
+    else gb->processor->pc += 1;
     gameboy_cycle(gb);
 
     instructions[opcode](gb);

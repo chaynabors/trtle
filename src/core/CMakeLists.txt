@@ -1,10 +1,8 @@
 target_sources(trtle PRIVATE
     cartridge.c
-    cartridge.h
     dma.c
     dma.h
     gameboy.c
-    gameboy.h
     interrupt_controller.c
     interrupt_controller.h
     joypad.c
