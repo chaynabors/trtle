@@ -60,11 +60,11 @@ typedef struct Cartridge {
     bool mode;
 } Cartridge;
 
-uint8_t cartridge_read_rom(GameBoy const* const gb, uint16_t address);
-void cartridge_write_rom(GameBoy* const gb, uint16_t address, uint8_t value);
+uint8_t cartridge_read_rom(GameBoy const * const gb, uint16_t address);
+void cartridge_write_rom(GameBoy * const gb, uint16_t address, uint8_t value);
 
-uint8_t cartridge_read_ram(GameBoy const* const gb, uint16_t address);
-void cartridge_write_ram(GameBoy* const gb, uint16_t address, uint8_t value);
+uint8_t cartridge_read_ram(GameBoy const * const gb, uint16_t address);
+void cartridge_write_ram(GameBoy * const gb, uint16_t address, uint8_t value);
 #endif /* !TRTLE_INTERNAL */
 
 CartridgeError cartridge_from_file(Cartridge ** return_cart, char const * const path);
