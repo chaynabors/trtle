@@ -1,22 +1,25 @@
 cmake_minimum_required(VERSION 3.16)
-set(TRTLE_VERSION 0.1.0)
-project(trtle VERSION ${TRTLE_VERSION} LANGUAGES C)
+
+set(TRTLE_VERSION_MAJOR 0)
+set(TRTLE_VERSION_MINOR 1)
+set(TRTLE_VERSION_PATCH 0)
+set(TRTLE_VERSION "${TRTLE_VERSION_MAJOR}.${TRTLE_VERSION_MINOR}.${TRTLE_VERSION_PATCH}")
+
+project(trtle LANGUAGES C)
+
+set (TRTLE_SOURCE_DIR "${PROJECT_SOURCE_DIR}/src")
+set (TRTLE_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include/trtle")
 
 add_library(trtle)
-add_subdirectory(src)
-target_include_directories(trtle PRIVATE "src" "include/trtle")
+add_subdirectory(${TRTLE_SOURCE_DIR})
+target_include_directories(trtle PRIVATE "src")
+target_include_directories(trtle PUBLIC
+    $<BUILD_INTERFACE:${TRTLE_INCLUDE_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
+set_property(TARGET trtle PROPERTY VERSION ${TRTLE_VERSION})
+set_property(TARGET trtle PROPERTY SOVERSION ${TRTLE_VERSION_MAJOR})
 target_compile_definitions(trtle PRIVATE "TRTLE_INTERNAL")
-
-include(CMakePackageConfigHelpers)
-write_basic_package_version_file(
-    "trtleConfigVersion.cmake"
-    VERSION ${TRTLE_VERSION}
-    COMPATIBILITY AnyNewerVersion
-)
-
-install (DIRECTORY "include/trtle"
-    DESTINATION "include"
-)
 
 install(TARGETS trtle
     EXPORT trtleTargets
@@ -24,13 +27,21 @@ install(TARGETS trtle
     INCLUDES DESTINATION "include"
 )
 
+install (DIRECTORY "include/trtle" DESTINATION "include")
+
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+    ${CMAKE_BINARY_DIR}/cmake/trtleVersion.cmake
+    VERSION ${TRTLE_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
 install(EXPORT trtleTargets
     FILE "trtleConfig.cmake"
     NAMESPACE trtle::
-    DESTINATION "lib/cmake/trtle"
+    DESTINATION "cmake"
 )
-
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/trtleConfig.cmake"
-              "${CMAKE_CURRENT_BINARY_DIR}/trtleConfigVersion.cmake"
-    DESTINATION "lib/cmake/trtle"
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cmake/trtleConfig.cmake"
+              "${CMAKE_CURRENT_BINARY_DIR}/cmake/trtleConfigVersion.cmake"
+    DESTINATION "cmake"
 )

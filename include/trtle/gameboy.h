@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define GAMEBOY_TILESET_WIDTH  (128)
+#define GAMEBOY_TILESET_HEIGHT (192)
+#define GAMEBOY_BACKGROUND_WIDTH  (256)
+#define GAMEBOY_BACKGROUND_HEIGHT (256)
 #define GAMEBOY_DISPLAY_WIDTH  (160)
 #define GAMEBOY_DISPLAY_HEIGHT (144)
 
