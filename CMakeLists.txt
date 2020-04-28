@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-set(TRTLE_VERSION 0.0.1)
+set(TRTLE_VERSION 0.1.0)
 project(trtle VERSION ${TRTLE_VERSION} LANGUAGES C)
 
 add_library(trtle)
@@ -12,6 +12,10 @@ write_basic_package_version_file(
     "trtleConfigVersion.cmake"
     VERSION ${TRTLE_VERSION}
     COMPATIBILITY AnyNewerVersion
+)
+
+install (DIRECTORY "include/trtle"
+    DESTINATION "include"
 )
 
 install(TARGETS trtle

@@ -2,6 +2,7 @@
 #include "dma.h"
 
 #include "gameboy.h"
+#include "processor.h"
 
 DMA * dma_create() {
     return calloc(1, sizeof(DMA));

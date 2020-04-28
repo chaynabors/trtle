@@ -2,6 +2,7 @@
 #include "ppu.h"
 
 #include "gameboy.h"
+#include "interrupt_controller.h"
 
 #define PPU_LCDC_LCD_ENABLE_BIT           (0b10000000)
 #define PPU_LCDC_WINDOW_MAP_BIT           (0b01000000)

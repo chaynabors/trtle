@@ -2,6 +2,7 @@
 #include "joypad.h"
 
 #include "gameboy.h"
+#include "interrupt_controller.h"
 
 enum P1Bit {
     P1_BIT_RIGHT         = 0b00000001,
