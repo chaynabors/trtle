@@ -1,6 +1,9 @@
 #ifndef TRTLE_CARTRIDGE_H
 #define TRTLE_CARTRIDGE_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 typedef struct GameBoy GameBoy;
 
 typedef enum CartridgeError {
@@ -13,7 +16,6 @@ typedef enum CartridgeError {
     CARTRIDGE_ERROR_MBC_NOT_SUPPORTED
 } CartridgeError;
 
-#if defined(TRTLE_INTERNAL)
 typedef enum MBC {
     MBC_NONE                           = 0x00,
     MBC_MBC1                           = 0x01,
@@ -60,14 +62,15 @@ typedef struct Cartridge {
     bool mode;
 } Cartridge;
 
-uint8_t cartridge_read_rom(GameBoy const * const gb, uint16_t address);
-void cartridge_write_rom(GameBoy * const gb, uint16_t address, uint8_t value);
-
-uint8_t cartridge_read_ram(GameBoy const * const gb, uint16_t address);
-void cartridge_write_ram(GameBoy * const gb, uint16_t address, uint8_t value);
-#endif /* !TRTLE_INTERNAL */
-
 CartridgeError cartridge_from_file(Cartridge ** return_cart, char const * const path);
 void cartridge_delete(Cartridge ** const cart);
+
+#if defined(TRTLE_INTERNAL)
+uint8_t cartridge_read_rom(GameBoy const* const gb, uint16_t address);
+void cartridge_write_rom(GameBoy* const gb, uint16_t address, uint8_t value);
+
+uint8_t cartridge_read_ram(GameBoy const* const gb, uint16_t address);
+void cartridge_write_ram(GameBoy* const gb, uint16_t address, uint8_t value);
+#endif /* !TRTLE_INTERNAL */
 
 #endif /* !TRTLE_CARTRIDGE_H */

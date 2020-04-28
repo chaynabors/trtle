@@ -1,6 +1,15 @@
 #include "pch.h"
 #include "gameboy.h"
 
+#include "dma.h"
+#include "interrupt_controller.h"
+#include "joypad.h"
+#include "ppu.h"
+#include "processor.h"
+#include "serial.h"
+#include "sound_controller.h"
+#include "timer.h"
+
 #define UNMAPPED_ALL_ONES (0b11111111)
 
 static uint8_t dmg_boot[] = {

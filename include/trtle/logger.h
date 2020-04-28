@@ -31,7 +31,6 @@ void logger_log_info(char* fmt, ...);
 #define TRTLE_LOG_WARN(fmt, ...)
 #define TRTLE_LOG_INFO(fmt, ...)
 #endif
-
 #endif /* !TRTLE_INTERNAL */
 
 #endif /* !TRTLE_LOGGING_H*/
