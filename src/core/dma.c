@@ -4,15 +4,6 @@
 #include "gameboy.h"
 #include "processor.h"
 
-DMA * dma_create() {
-    return calloc(1, sizeof(DMA));
-}
-
-void dma_delete(DMA ** const dma) {
-    free(*dma);
-    *dma = NULL;
-}
-
 void dma_initialize(DMA * const dma, bool skip_bootrom) {
     dma->dma = 0xCC; // TODO: Make random
     dma->queue = -1;

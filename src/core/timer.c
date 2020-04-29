@@ -9,15 +9,6 @@
 #define TIMER_CLOCK_SELECT_BITS (0b00000011)
 #define TIMER_START_BIT         (0b00000100)
 
-Timer * timer_create() {
-    return calloc(1, sizeof(Timer));
-}
-
-void timer_delete(Timer ** const t) {
-    free(*t);
-    *t = NULL;
-}
-
 void timer_initialize(Timer * const t, bool skip_bootrom) {
     if (skip_bootrom) t->internal_counter = 0xABCC;
     else t->internal_counter = 0x0000;

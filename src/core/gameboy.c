@@ -32,36 +32,37 @@ static uint8_t dmg_boot[] = {
 };
 
 GameBoy * gameboy_create() {
-    GameBoy * gb = malloc(sizeof(GameBoy));
+    GameBoy * gb = calloc(1, sizeof(GameBoy));
+
     gb->cartridge = NULL;
-    gb->dma = dma_create();
-    gb->interrupt_controller = interrupt_controller_create();
-    gb->joypad = joypad_create();
-    gb->ppu = ppu_create();
-    gb->processor = processor_create();
-    gb->serial = serial_create();
-    gb->sound_controller = sound_controller_create();
-    gb->timer = timer_create();
+    gb->dma = calloc(1, sizeof(DMA));
+    gb->interrupt_controller = calloc(1, sizeof(InterruptController));
+    gb->joypad = calloc(1, sizeof(Joypad));
+    gb->ppu = calloc(1, sizeof(PPU));
+    gb->processor = calloc(1, sizeof(Processor));
+    gb->serial = calloc(1, sizeof(Serial));
+    gb->sound_controller = calloc(1, sizeof(SoundController));
+    gb->timer = calloc(1, sizeof(Timer));
     gb->boot = false;
     return gb;
 }
 
-void gameboy_delete(GameBoy ** gb) { 
+void gameboy_delete(GameBoy * const gb) { 
     if (gb != NULL) {
-        dma_delete(&(*gb)->dma);
-        interrupt_controller_delete(&(*gb)->interrupt_controller);
-        joypad_delete(&(*gb)->joypad);
-        ppu_delete(&(*gb)->ppu);
-        processor_delete(&(*gb)->processor);
-        serial_delete(&(*gb)->serial);
-        sound_controller_delete(&(*gb)->sound_controller);
-        timer_delete(&(*gb)->timer);
+        free(gb->dma);
+        free(gb->interrupt_controller);
+        free(gb->joypad);
+        free(gb->ppu);
+        free(gb->processor);
+        free(gb->serial);
+        free(gb->sound_controller);
+        free(gb->timer);
+
         free(gb);
-        gb = NULL;
     }
 };
 
-void gameboy_initialize(GameBoy* const gb, bool skip_bootrom) {
+void gameboy_initialize(GameBoy * const gb, bool skip_bootrom) {
     dma_initialize(gb->dma, skip_bootrom);
     interrupt_controller_initialize(gb->interrupt_controller, skip_bootrom);
     joypad_initialize(gb->joypad, skip_bootrom);

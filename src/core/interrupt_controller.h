@@ -16,8 +16,6 @@ typedef struct InterruptController {
     int8_t cycles_until_ime;
 } InterruptController;
 
-InterruptController * interrupt_controller_create();
-void interrupt_controller_delete(InterruptController ** const ic);
 void interrupt_controller_initialize(InterruptController * const ic, bool skip_bootrom);
 
 uint8_t interrupt_controller_get_enables(GameBoy const * const gb);

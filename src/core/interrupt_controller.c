@@ -5,15 +5,6 @@
 
 #define INTERRUPT_MASK (0b11100000)
 
-InterruptController * interrupt_controller_create() {
-    return calloc(1, sizeof(InterruptController));
-}
-
-void interrupt_controller_delete(InterruptController ** const ic) {
-    free(*ic);
-    *ic = NULL;
-}
-
 void interrupt_controller_initialize(InterruptController * const ic, bool skip_bootrom) {
     ic->enables = 0;
     ic->flags = skip_bootrom ? 1 : 0;

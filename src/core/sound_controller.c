@@ -10,15 +10,6 @@
 #define SOUND_CONTROLLER_NR44_MASK (0b00111111)
 #define SOUND_CONTROLLER_NR52_MASK (0b01110000)
 
-SoundController * sound_controller_create() {
-    return calloc(1, sizeof(SoundController));
-}
-
-void sound_controller_delete(SoundController ** const sc) {
-    free(*sc);
-    *sc = NULL;
-}
-
 void sound_controller_initialize(SoundController * const sc, bool skip_bootrom) {
     sc->nr10 = 0x80;
     sc->nr11 = 0xBF;

@@ -64,8 +64,6 @@ typedef struct Processor {
     bool skip_next_interrupt;
 } Processor;
 
-Processor * processor_create();
-void processor_delete(Processor ** const p);
 void processor_initialize(Processor * const p, bool skip_bootrom);
 
 void processor_process_instruction(GameBoy * const gb);

@@ -12,15 +12,6 @@
 #define PROCESSOR_NEGATIVE_BIT   (0b01000000)
 #define PROCESSOR_ZERO_BIT       (0b10000000)
 
-Processor * processor_create() {
-    return calloc(1, sizeof(Processor));
-}
-
-void processor_delete(Processor ** const p) {
-    free(*p);
-    *p = NULL;
-}
-
 void processor_initialize(Processor * const p, bool skip_bootrom) {
     p->af = 0x01B0;
     p->bc = 0x0013;

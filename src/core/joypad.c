@@ -20,15 +20,6 @@ enum P1Bit {
     P1_BIT_UNUSED        = 0b11000000
 };
 
-Joypad * joypad_create() {
-    return calloc(1, sizeof(Joypad));
-}
-
-void joypad_delete(Joypad ** const jp) {
-    free(*jp);
-    *jp = NULL;
-}
-
 void joypad_initialize(Joypad * const jp, bool skip_bootrom) {
     jp->p1 = 0;
 }

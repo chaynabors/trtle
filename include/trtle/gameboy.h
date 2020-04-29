@@ -53,7 +53,7 @@ typedef struct GameBoy {
 } GameBoy;
 
 GameBoy * gameboy_create();
-void gameboy_delete(GameBoy ** gb);
+void gameboy_delete(GameBoy * gb);
 void gameboy_initialize(GameBoy * const gb, bool skip_bootrom);
 
 void gameboy_set_cartridge(GameBoy * const gb, Cartridge * const cartridge);

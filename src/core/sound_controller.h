@@ -27,8 +27,6 @@ typedef struct SoundController {
     uint8_t nr52;
 } SoundController;
 
-SoundController * sound_controller_create();
-void sound_controller_delete(SoundController ** const sc);
 void sound_controller_initialize(SoundController * const sc, bool skip_bootrom);
 
 uint8_t sound_controller_read_nr10(GameBoy const * const gb);

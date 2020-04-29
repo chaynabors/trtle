@@ -48,15 +48,6 @@
 
 #define PPU_LCD_COLOR_CODE (4)
 
-PPU * ppu_create() {
-    return calloc(1, sizeof(PPU));
-}
-
-void ppu_delete(PPU ** const ppu) {
-    free(*ppu);
-    *ppu = NULL;
-}
-
 void ppu_initialize(PPU * const ppu, bool skip_bootrom) {
     ppu->lcdc = 0x91;
     ppu->stat = 0x00;
@@ -270,7 +261,9 @@ void ppu_cycle(GameBoy * const gb) {
     }
 }
 
-uint8_t ppu_read_lcdc(GameBoy const * const gb) { return gb->ppu->lcdc; }
+uint8_t ppu_read_lcdc(GameBoy const * const gb) {
+    return gb->ppu->lcdc;
+}
 
 void ppu_write_lcdc(GameBoy * const gb, uint8_t value) {
     if (!(value & PPU_LCDC_LCD_ENABLE_BIT)) {
@@ -298,7 +291,9 @@ void ppu_write_oam(GameBoy * const gb, uint16_t address, uint8_t value) {
     gb->ppu->oam[address] = value;
 }
 
-uint8_t ppu_read_vram(GameBoy const * const gb, uint16_t address) { return gb->ppu->vram[address]; }
+uint8_t ppu_read_vram(GameBoy const * const gb, uint16_t address) {
+    return gb->ppu->vram[address];
+}
 
 void ppu_write_vram(GameBoy * const gb, uint16_t address, uint8_t value) {
     gb->ppu->vram[address] = value;

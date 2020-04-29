@@ -28,7 +28,7 @@ static CartridgeError cartridge_setup_rom(Cartridge * const cart, char const * c
     fseek(file, 0, SEEK_END);
     size_t buffer_length = ftell(file);
     fseek(file, 0, SEEK_SET);
-    uint8_t * buffer = malloc(buffer_length);
+    uint8_t * buffer = calloc(1, buffer_length);
     if (buffer == NULL) {
         fclose(file);
         return CARTRIDGE_ERROR_ROM_ALLOCATION_FAILED;
@@ -79,7 +79,7 @@ static CartridgeError cartridge_setup_ram(Cartridge* const cart) {
     if (cart->type == MBC_MBC2 || cart->type == MBC_MBC2_BATTERY) cart->ram_size = 0x200;
 
     if (cart->ram_size > 0) {
-        cart->ram = malloc(sizeof(uint8_t) * cart->ram_size);
+        cart->ram = calloc(1, cart->ram_size);
         if (cart->ram == NULL) return CARTRIDGE_ERROR_RAM_ALLOCATION_FAILED;
         memset(cart->ram, 0xFF, sizeof(uint8_t) * cart->ram_size);
     }
@@ -90,7 +90,7 @@ static CartridgeError cartridge_setup_ram(Cartridge* const cart) {
 CartridgeError cartridge_from_file(Cartridge ** return_cart, char const * const path) {
     if (return_cart == NULL) return CARTIRDGE_ERROR_RETURN_ARGUMENT_NULL;
 
-    Cartridge * cart = malloc(sizeof(Cartridge));
+    Cartridge * cart = calloc(1, sizeof(Cartridge));
     if (cart == NULL) return CARTRIDGE_ERROR_CARTRIDGE_ALLOCATION_FAILED;
     memset(cart, 0, sizeof(Cartridge));
 

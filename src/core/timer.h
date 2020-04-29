@@ -25,8 +25,6 @@ typedef struct Timer {
     bool writing_tima;
 } Timer;
 
-Timer * timer_create();
-void timer_delete(Timer ** const t);
 void timer_initialize(Timer * const t, bool skip_bootrom);
 
 void timer_cycle(GameBoy * const gb);
