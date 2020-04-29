@@ -254,8 +254,12 @@ static uint8_t cartridge_read_high(GameBoy const * const gb, uint16_t address) {
 }
 
 uint8_t cartridge_read_rom(GameBoy const * const gb, uint16_t address) {
-    if (address <= 0x3FFF) return cartridge_read_low(gb, address);
-    else return cartridge_read_high(gb, address);
+    if (gb->cartridge != NULL) {
+        if (address <= 0x3FFF) return cartridge_read_low(gb, address);
+        else return cartridge_read_high(gb, address);
+    }
+
+    return 0xFF;
 }
 
 void cartridge_write_rom(GameBoy * const gb, uint16_t address, uint8_t value) {
