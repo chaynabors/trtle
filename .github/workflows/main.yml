@@ -31,7 +31,7 @@ jobs:
           API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
         with:
           source_file: 'README.md'
-          destination_repo: 'saltyparts/saltyparts.github.io'
+          destination_repo: 'Saltyparts/Saltyparts.github.io'
           destination_folder: 'src'
           user_email: 'chaynabors@gmail.com'
           user_name: 'Saltyparts'
