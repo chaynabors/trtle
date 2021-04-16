@@ -1,6 +1,6 @@
 # This is a basic workflow to help you get started with Actions
 
-name: CI
+name: push readme
 
 # Controls when the action will run. 
 on:
@@ -31,6 +31,7 @@ jobs:
           API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
         with:
           source_file: 'README.md'
+          rename: 'trtle.md'
           destination_repo: 'Saltyparts/Saltyparts.github.io'
           destination_folder: 'src'
           user_email: 'chaynabors@gmail.com'
