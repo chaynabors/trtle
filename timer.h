@@ -1,7 +1,8 @@
 #ifndef TRTLE_TIMER_H
 #define TRTLE_TIMER_H
 
-#define LITTLE_ENDIAN
+#include <stdbool.h>
+#include <stdint.h>
 
 typedef struct GameBoy GameBoy;
 
@@ -9,10 +10,10 @@ typedef struct Timer {
     union {
         uint16_t internal_counter;
         struct {
-#ifdef LITTLE_ENDIAN
+#ifdef __ORDER_LITTLE_ENDIAN__
             uint8_t __ignore;
             uint8_t div;
-#elif BIG_ENDIAN
+#else
             uint8_t div;
             uint8_t __ignore;
 #endif

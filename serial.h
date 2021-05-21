@@ -1,6 +1,9 @@
 #ifndef TRTLE_SERIAL_H
 #define TRTLE_SERIAL_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 typedef struct GameBoy GameBoy;
 
 typedef struct Serial {

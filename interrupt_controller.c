@@ -1,4 +1,3 @@
-#include "pch.h"
 #include "interrupt_controller.h"
 
 #include "gameboy.h"

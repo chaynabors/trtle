@@ -1,5 +1,6 @@
-#include "pch.h"
 #include "timer.h"
+
+#include <stdlib.h>
 
 #include "interrupt_controller.h"
 #include "processor.h"

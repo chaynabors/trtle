@@ -1,9 +1,12 @@
-#include "pch.h"
 #include "gameboy.h"
 
+#include <stdlib.h>
+
+#include "cartridge.h"
 #include "dma.h"
 #include "interrupt_controller.h"
 #include "joypad.h"
+#include "logger.h"
 #include "ppu.h"
 #include "processor.h"
 #include "serial.h"
@@ -44,6 +47,17 @@ GameBoy * gameboy_create() {
     gb->sound_controller = calloc(1, sizeof(SoundController));
     gb->timer = calloc(1, sizeof(Timer));
     gb->boot = false;
+
+    bool skip_bootrom = true;
+    dma_initialize(gb->dma, skip_bootrom);
+    interrupt_controller_initialize(gb->interrupt_controller, skip_bootrom);
+    joypad_initialize(gb->joypad, skip_bootrom);
+    ppu_initialize(gb->ppu, skip_bootrom);
+    processor_initialize(gb->processor, skip_bootrom);
+    serial_initialize(gb->serial, skip_bootrom);
+    sound_controller_initialize(gb->sound_controller, skip_bootrom);
+    timer_initialize(gb->timer, skip_bootrom);
+
     return gb;
 }
 
@@ -62,7 +76,8 @@ void gameboy_delete(GameBoy * const gb) {
     }
 };
 
-void gameboy_initialize(GameBoy * const gb, bool skip_bootrom) {
+void gameboy_reset(GameBoy * gb) {
+    bool skip_bootrom = true;
     dma_initialize(gb->dma, skip_bootrom);
     interrupt_controller_initialize(gb->interrupt_controller, skip_bootrom);
     joypad_initialize(gb->joypad, skip_bootrom);
@@ -71,7 +86,6 @@ void gameboy_initialize(GameBoy * const gb, bool skip_bootrom) {
     serial_initialize(gb->serial, skip_bootrom);
     sound_controller_initialize(gb->sound_controller, skip_bootrom);
     timer_initialize(gb->timer, skip_bootrom);
-    gb->boot = skip_bootrom;
 }
 
 void gameboy_set_cartridge(GameBoy * const gb, Cartridge * const cart) {
@@ -102,7 +116,7 @@ void gameboy_update_to_vblank(GameBoy* const gb, GameBoyInput input) {
     }
 }
 
-size_t gameboy_get_background_data(GameBoy const * const gb, uint8_t data[], size_t length) {
+size_t gameboy_get_background_data(GameBoy const * const gb, uint32_t * data, size_t length) {
     if (gb == NULL || data == NULL) {
         TRTLE_LOG_ERR("Null argument received while fetching background data");
         return 0;
@@ -111,7 +125,7 @@ size_t gameboy_get_background_data(GameBoy const * const gb, uint8_t data[], siz
     return ppu_get_background_data(gb, data, length);
 }
 
-size_t gameboy_get_display_data(GameBoy const * const gb, uint8_t data[], size_t length) {
+size_t gameboy_get_display_data(GameBoy const * const gb, uint32_t * data, size_t length) {
     if (gb == NULL || data == NULL) {
         TRTLE_LOG_ERR("Null argument received while fetching display data");
         return 0;
@@ -120,7 +134,7 @@ size_t gameboy_get_display_data(GameBoy const * const gb, uint8_t data[], size_t
     return ppu_get_display_data(gb, data, length);
 }
 
-size_t gameboy_get_tileset_data(GameBoy const * const gb, uint8_t data[], size_t length) {
+size_t gameboy_get_tileset_data(GameBoy const * const gb, uint32_t * data, size_t length) {
     if (gb == NULL || data == NULL) {
         TRTLE_LOG_ERR("Null argument received while fetching tileset data");
         return 0;

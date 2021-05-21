@@ -1,6 +1,9 @@
 #ifndef TRTLE_JOYPAD_H
 #define TRTLE_JOYPAD_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 typedef struct GameBoy GameBoy;
 typedef struct GameBoyInput GameBoyInput;
 

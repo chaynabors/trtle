@@ -1,6 +1,9 @@
 #ifndef TRTLE_DMA_H
 #define TRTLE_DMA_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 typedef struct GameBoy GameBoy;
 
 typedef struct DMA {

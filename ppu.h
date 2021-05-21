@@ -1,6 +1,9 @@
 #ifndef TRTLE_PPU_H
 #define TRTLE_PPU_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #define PPU_ROWS_PER_TILE       (8)
 #define PPU_PIXELS_PER_TILE_ROW (8)
 
@@ -67,8 +70,8 @@ void ppu_write_vram(GameBoy * const gb, uint16_t address, uint8_t value);
 
 GraphicsMode ppu_get_mode(GameBoy const * const gb);
 
-size_t ppu_get_background_data(GameBoy const* const gb, uint8_t data[], size_t length);
-size_t ppu_get_display_data(GameBoy const* const gb, uint8_t data[], size_t length);
-size_t ppu_get_tileset_data(GameBoy const * const gb, uint8_t data[], size_t length);
+size_t ppu_get_background_data(GameBoy const* const gb, uint32_t data[], size_t length);
+size_t ppu_get_display_data(GameBoy const* const gb, uint32_t data[], size_t length);
+size_t ppu_get_tileset_data(GameBoy const * const gb, uint32_t data[], size_t length);
 
 #endif /* !TRTLE_PPU_H */

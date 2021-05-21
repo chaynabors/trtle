@@ -1,7 +1,8 @@
-#include "pch.h"
 #include "dma.h"
 
+#include "cartridge.h"
 #include "gameboy.h"
+#include "ppu.h"
 #include "processor.h"
 
 void dma_initialize(DMA * const dma, bool skip_bootrom) {

@@ -1,4 +1,3 @@
-#include "pch.h"
 #include "joypad.h"
 
 #include "gameboy.h"

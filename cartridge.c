@@ -1,13 +1,18 @@
-#include "pch.h"
 #include "cartridge.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "gameboy.h"
+#include "logger.h"
 
 #define MBC_CARTRIDGE_TYPE_ADDRESS (0x0147)
 #define MBC_ROM_SIZE_ADDRESS       (0x0148)
 #define MBC_RAM_SIZE_ADDRESS       (0x0149)
-#define ROM_BANK_SIZE       (0x4000)
-#define RAM_BANK_SIZE       (0x2000)
+
+#define ROM_BANK_SIZE              (0x4000)
+#define RAM_BANK_SIZE              (0x2000)
 
 #define RAMG_ENABLE        (0b00001010)
 
@@ -21,24 +26,10 @@
 #define MBC5_ROMB1_MASK    (0b00000001)
 #define MBC5_RAMB_MASK     (0b00001111)
 
-static CartridgeError cartridge_setup_rom(Cartridge * const cart, char const * const path) {
-    FILE * file = fopen(path, "rb");
-    if (file == NULL) return CARTRIDGE_ERROR_FILE_NOT_FOUND;
-
-    fseek(file, 0, SEEK_END);
-    size_t buffer_length = ftell(file);
-    fseek(file, 0, SEEK_SET);
-    uint8_t * buffer = calloc(1, buffer_length);
-    if (buffer == NULL) {
-        fclose(file);
-        return CARTRIDGE_ERROR_ROM_ALLOCATION_FAILED;
-    }
-
-    fread(buffer, 1, buffer_length, file);
-    cart->rom = buffer;
-    cart->rom_size = buffer_length;
-
-    fclose(file);
+static CartridgeError cartridge_setup_rom(Cartridge * const cart, const void * rom_data, size_t rom_len) {
+    cart->rom = calloc(1, rom_len);
+    memcpy(cart->rom, rom_data, rom_len);
+    cart->rom_size = rom_len;
 
     size_t rom_size = cart->rom[MBC_ROM_SIZE_ADDRESS];
     switch (rom_size) {
@@ -87,14 +78,14 @@ static CartridgeError cartridge_setup_ram(Cartridge* const cart) {
     return CARTRIDGE_ERROR_NONE;
 }
 
-CartridgeError cartridge_from_file(Cartridge ** return_cart, char const * const path) {
+CartridgeError cartridge_from_memory(Cartridge ** return_cart, const void * data, size_t size) {
     if (return_cart == NULL) return CARTIRDGE_ERROR_RETURN_ARGUMENT_NULL;
 
     Cartridge * cart = calloc(1, sizeof(Cartridge));
     if (cart == NULL) return CARTRIDGE_ERROR_CARTRIDGE_ALLOCATION_FAILED;
     memset(cart, 0, sizeof(Cartridge));
 
-    CartridgeError error = cartridge_setup_rom(cart, path);
+    CartridgeError error = cartridge_setup_rom(cart, data, size);
     if (error) {
         free(cart);
         cart = NULL;
@@ -150,6 +141,7 @@ CartridgeError cartridge_from_file(Cartridge ** return_cart, char const * const 
 
     error = cartridge_setup_ram(cart);
     if (error) {
+        free(cart->rom);
         free(cart);
         cart = NULL;
         return error;
@@ -159,18 +151,18 @@ CartridgeError cartridge_from_file(Cartridge ** return_cart, char const * const 
     return CARTRIDGE_ERROR_NONE;
 }
 
-void cartridge_delete(Cartridge ** const cart) {
-    if (*cart != NULL) {
-        if ((*cart)->rom != NULL) {
-            free((*cart)->rom);
-            (*cart)->rom = NULL;
+void cartridge_delete(Cartridge * cart) {
+    if (cart != NULL) {
+        if ((cart)->rom != NULL) {
+            free((cart)->rom);
+            (cart)->rom = NULL;
         }
-        if ((*cart)->ram != NULL) {
-            free((*cart)->ram);
-            (*cart)->ram = NULL;
+        if ((cart)->ram != NULL) {
+            free((cart)->ram);
+            (cart)->ram = NULL;
         }
-        free(*cart);
-        *cart = NULL;
+        free(cart);
+        cart = NULL;
     }
 }
 

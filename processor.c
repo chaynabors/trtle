@@ -1,8 +1,8 @@
-#include "pch.h"
 #include "processor.h"
 
-#include "interrupt_controller.h"
 #include "gameboy.h"
+#include "interrupt_controller.h"
+#include "logger.h"
 
 #define INTERRUPT_FLAGS_ADDRESS  (0xFF0F)
 #define INTERRUPT_ENABLE_ADDRESS (0xFFFF)
@@ -91,7 +91,7 @@ static void ld_da16_a(GameBoy * const gb) {
 }
 
 static void ldh_a_dc(GameBoy * const gb) {
-    gb->processor->a = (gb, gameboy_read(gb, 0xFF00 | gb->processor->c));
+    gb->processor->a = gameboy_read(gb, 0xFF00 | gb->processor->c);
     gameboy_cycle(gb);
 }
 
@@ -522,7 +522,7 @@ static void add_hl_##reg(GameBoy * const gb) {\
 \
     gb->processor->f &= PROCESSOR_ZERO_BIT;\
     if (((initial & 0x0FFF) + (add & 0x0FFF)) & 0x1000) gb->processor->f |= PROCESSOR_HALF_BIT;\
-    if (((uint32_t)initial) + ((uint32_t)add) & 0x10000) gb->processor->f |= PROCESSOR_CARRY_BIT;\
+    if ((((uint32_t)initial) + ((uint32_t)add)) & 0x10000) gb->processor->f |= PROCESSOR_CARRY_BIT;\
 }
 
 static void add_sp_r8(GameBoy * const gb) {
@@ -1134,8 +1134,6 @@ static void set_##num##_dhl(GameBoy * const gb) {\
     gameboy_cycle(gb);\
 }
 
-#pragma region Prefixed Opcodes
-
 /*0*/         /*1*/         /*2*/         /*3*/         /*4*/         /*5*/         /*6*/        /*7*/
 /*8*/         /*9*/         /*A*/         /*B*/         /*C*/         /*D*/         /*E*/        /*F*/
 RLC_R(b)      RLC_R(c)      RLC_R(d)      RLC_R(e)      RLC_R(h)      RLC_R(l)      /*RLC_DHL*/  RLC_R(a)      /*0*/
@@ -1214,12 +1212,7 @@ static void prefix_cb(GameBoy * const gb) {
     prefixed_instructions[opcode](gb);
 }
 
-#pragma endregion
-
-#pragma region Opcodes
-
 // Helper functions
-PUSH_RR(pc)
 RST_NNH(40)
 RST_NNH(48)
 RST_NNH(50)
@@ -1361,5 +1354,3 @@ void processor_process_instruction(GameBoy * const gb) {
 
     instructions[opcode](gb);
 }
-
-#pragma endregion

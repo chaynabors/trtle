@@ -1,6 +1,9 @@
 #ifndef TRTLE_INTERRUPT_CONTROLLER_H
 #define TRTLE_INTERRUPT_CONTROLLER_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #define VBLANK_INTERRUPT_BIT     (0b00000001)
 #define LCD_STAT_INTERRUPT_BIT   (0b00000010)
 #define TIMER_INTERRUPT_BIT      (0b00000100)

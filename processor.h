@@ -1,8 +1,10 @@
 #ifndef TRTLE_PROCESSOR_H
 #define TRTLE_PROCESSOR_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #define PROCESSOR_CLOCK_SPEED (4194304)
-#define LITTLE_ENDIAN
 
 typedef struct GameBoy GameBoy;
 
@@ -10,10 +12,10 @@ typedef struct Processor {
     union {
         uint16_t af;
         struct {
-#ifdef LITTLE_ENDIAN
+#ifdef __ORDER_LITTLE_ENDIAN__
             uint8_t f;
             uint8_t a;
-#elif BIG_ENDIAN
+#else
             uint8_t a;
             uint8_t f;
 #endif
@@ -22,10 +24,10 @@ typedef struct Processor {
     union {
         uint16_t bc;
         struct {
-#ifdef LITTLE_ENDIAN
+#ifdef __ORDER_LITTLE_ENDIAN__
             uint8_t c;
             uint8_t b;
-#elif BIG_ENDIAN
+#else
             uint8_t b;
             uint8_t c;
 #endif
@@ -34,10 +36,10 @@ typedef struct Processor {
     union {
         uint16_t de;
         struct {
-#ifdef LITTLE_ENDIAN
+#ifdef __ORDER_LITTLE_ENDIAN__
             uint8_t e;
             uint8_t d;
-#elif BIG_ENDIAN
+#else
             uint8_t d;
             uint8_t e;
 #endif
@@ -46,10 +48,10 @@ typedef struct Processor {
     union {
         uint16_t hl;
         struct {
-#ifdef LITTLE_ENDIAN
+#ifdef __ORDER_LITTLE_ENDIAN__
             uint8_t l;
             uint8_t h;
-#elif BIG_ENDIAN
+#else
             uint8_t h;
             uint8_t l;
 #endif

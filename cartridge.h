@@ -62,15 +62,13 @@ typedef struct Cartridge {
     bool mode;
 } Cartridge;
 
-CartridgeError cartridge_from_file(Cartridge ** return_cart, char const * const path);
-void cartridge_delete(Cartridge ** const cart);
+CartridgeError cartridge_from_memory(Cartridge ** return_cart, const void * data, size_t size);
+void cartridge_delete(Cartridge * cart);
 
-#if defined(TRTLE_INTERNAL)
 uint8_t cartridge_read_rom(GameBoy const* const gb, uint16_t address);
 void cartridge_write_rom(GameBoy* const gb, uint16_t address, uint8_t value);
 
 uint8_t cartridge_read_ram(GameBoy const* const gb, uint16_t address);
 void cartridge_write_ram(GameBoy* const gb, uint16_t address, uint8_t value);
-#endif /* !TRTLE_INTERNAL */
 
 #endif /* !TRTLE_CARTRIDGE_H */

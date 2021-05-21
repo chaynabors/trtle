@@ -1,4 +1,3 @@
-#include "pch.h"
 #include "sound_controller.h"
 
 #include "gameboy.h"

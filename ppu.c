@@ -1,4 +1,3 @@
-#include "pch.h"
 #include "ppu.h"
 
 #include "gameboy.h"
@@ -13,7 +12,7 @@ typedef enum LCDCBit {
     LCDC_SPRITE_SIZE_BIT          = 0b00000100,
     LCDC_SPRITE_ENABLE_BIT        = 0b00000010,
     LCDC_BG_ENABLE_BIT            = 0b00000001
-};
+} LCDCBit;
 
 typedef enum StatBit {
     STAT_UNUSED_BIT               = 0b10000000,
@@ -199,7 +198,8 @@ static void ppu_draw_line(GameBoy * const gb) {
             uint8_t sprite_a = sprites[(i - 1) * 4 + 3];
 
             bool flip_x = (sprite_a & SPRITE_FLIP_X_BIT) >> 5;
-            bool flip_y = (sprite_a & SPRITE_FLIP_Y_BIT) >> 6;
+            // TODO: Verify this functionality
+            // bool flip_y = (sprite_a & SPRITE_FLIP_Y_BIT) >> 6;
             bool priority = (sprite_a & SPRITE_TO_BG_PRIORITY_BIT) >> 7;
 
             uint16_t tile_id;
@@ -219,7 +219,7 @@ static void ppu_draw_line(GameBoy * const gb) {
 
                 uint8_t color = gb->ppu->tile_buffer[tile_id][tile_row & 0x7][flip_x ? 7 - tile_column : tile_column];
 
-                if (color != 0 && (!priority || priority && (gb->ppu->display_buffer[(sprite_x + tile_column) + (size_t)gb->ppu->ly * GAMEBOY_DISPLAY_WIDTH] == 0))) {
+                if (color != 0 && (!priority || (priority && (gb->ppu->display_buffer[(sprite_x + tile_column) + (size_t)gb->ppu->ly * GAMEBOY_DISPLAY_WIDTH] == 0)))) {
                     uint8_t offset = color * 2;
                     uint8_t bits = 0b00000011 << offset;
                     uint8_t palette = (sprite_a >> 4) & 1 ? gb->ppu->obp1 : gb->ppu->obp0;
@@ -331,7 +331,19 @@ GraphicsMode ppu_get_mode(GameBoy const * const gb) {
     return gb->ppu->stat & STAT_MODE_BITS;
 }
 
-size_t ppu_get_background_data(GameBoy const * const gb, uint8_t data[], size_t length) {
+uint32_t get_pixel_color(uint8_t color_code) {
+    switch (color_code) {
+        case 0: return 0xF5F5F5F5;
+        case 1: return 0xAAAAAAAA;
+        case 2: return 0x55555555;
+        case 3: return 0x01010101;
+        case 4: return 0x00000000; // LCD color
+    }
+
+    return 0x00FF00FF;
+}
+
+size_t ppu_get_background_data(GameBoy const * const gb, uint32_t * data, size_t length) {
     for (size_t tile = 0; tile < PPU_BG_TILE_COUNT; tile++) {
         for (size_t row = 0; row < PPU_ROWS_PER_TILE; row++) {
             size_t y = tile / PPU_BG_WIDTH_IN_TILES * PPU_PIXELS_PER_TILE_ROW + row;
@@ -349,20 +361,17 @@ size_t ppu_get_background_data(GameBoy const * const gb, uint8_t data[], size_t 
     return PPU_BG_WIDTH_IN_PIXELS * PPU_BG_HEIGHT_IN_PIXELS;
 }
 
-size_t ppu_get_display_data(GameBoy const * const gb, uint8_t data[], size_t length) {
-    for (size_t x = 0; x < PPU_DISPLAY_WIDTH; x++) {
-        for (size_t y = 0; y < PPU_DISPLAY_HEIGHT; x++) {
-            if (gb->ppu->lcdc & LCDC_LCD_ENABLE_BIT) {
-                data[x + y * PPU_DISPLAY_WIDTH] = gb->ppu->display_buffer[x + y * PPU_DISPLAY_WIDTH];
-            }
-            else data[x + y * PPU_DISPLAY_WIDTH] = PPU_LCD_COLOR_CODE;
-            if (x + y * PPU_DISPLAY_WIDTH == length) return length;
-        }
+size_t ppu_get_display_data(GameBoy const * const gb, uint32_t * data, size_t length) {
+    for (size_t x = 0; x < PPU_DISPLAY_WIDTH * PPU_DISPLAY_HEIGHT; x++) {
+        if (gb->ppu->lcdc & LCDC_LCD_ENABLE_BIT) data[x] = get_pixel_color(gb->ppu->display_buffer[x]);
+        else data[x] = get_pixel_color(PPU_LCD_COLOR_CODE);
+
+        if (x == length) return length;
     }
     return PPU_DISPLAY_WIDTH * PPU_DISPLAY_HEIGHT;
 }
 
-size_t ppu_get_tileset_data(GameBoy const* const gb, uint8_t data[], size_t length) {
+size_t ppu_get_tileset_data(GameBoy const * const gb, uint32_t * data, size_t length) {
     for (size_t tile = 0; tile < PPU_TS_TILE_COUNT; tile++) {
         for (size_t row = 0; row < PPU_ROWS_PER_TILE; row++) {
             size_t y = tile / PPU_TS_WIDTH_IN_TILES * PPU_PIXELS_PER_TILE_ROW + row;

@@ -1,6 +1,9 @@
 #ifndef TRTLE_SOUND_CONTROLLER_H
 #define TRTLE_SOUND_CONTROLLER_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 typedef struct GameBoy GameBoy;
 
 typedef struct SoundController {

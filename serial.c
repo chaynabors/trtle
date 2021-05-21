@@ -1,4 +1,3 @@
-#include "pch.h"
 #include "serial.h"
 
 #include "gameboy.h"
