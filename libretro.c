@@ -56,7 +56,7 @@ void retro_get_system_info(struct retro_system_info * info) {
     info->library_name     = "trtle";
     info->library_version  = "0.1";
     info->need_fullpath    = false;
-    info->valid_extensions = "gb";
+    info->valid_extensions = "gb|gbc";
 }
 
 void retro_set_controller_port_device(unsigned port, unsigned device) {

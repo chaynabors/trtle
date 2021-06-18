@@ -164,12 +164,13 @@ static void ppu_draw_line(GameBoy * const gb) {
     if (gb->ppu->lcdc & LCDC_SPRITE_ENABLE_BIT) {
         uint8_t sprite_size = (gb->ppu->lcdc & LCDC_SPRITE_SIZE_BIT) ? 16 : 8;
 
-        uint8_t sprites[40];
+        uint8_t sprites[10][4];
         size_t sprite_count = 0;
-        for (size_t i = 0; i < 160; i += 4) {
-            int32_t sprite_y = gb->ppu->oam[i] - 16;
+
+        for (size_t i = 0; i < 40; i++) {
+            int32_t sprite_y = gb->ppu->oam[i * 4] - 16;
             if (sprite_y <= gb->ppu->ly && (gb->ppu->ly - sprite_y) < sprite_size) {
-                for (size_t k = 0; k < 4; k++) sprites[sprite_count * 4 + k] = gb->ppu->oam[i + k];
+                for (size_t k = 0; k < 4; k++) sprites[sprite_count][k] = gb->ppu->oam[i * 4 + k];
                 if (++sprite_count == 10) break;
             }
         }
@@ -178,24 +179,25 @@ static void ppu_draw_line(GameBoy * const gb) {
             for (size_t i = 0; i < sprite_count - 1; i++) {
                 size_t sprite_min_x = i;
                 for (size_t k = i + 1; k < sprite_count; k++) {
-                    if (sprites[k * 4 + 1] < sprites[sprite_min_x * 4 + 1]) sprite_min_x = k;
+                    if (sprites[k][1] < sprites[sprite_min_x][1]) sprite_min_x = k;
                 }
 
                 if (sprite_min_x != i) {
                     for (size_t k = 0; k < 4; k++) {
-                        uint8_t temp = sprites[i * 4 + k];
-                        sprites[i * 4 + k] = sprites[sprite_min_x * 4 + k];
-                        sprites[sprite_min_x * 4 + k] = temp;
+                        uint8_t temp = sprites[i][k];
+                        sprites[i][k] = sprites[sprite_min_x][k];
+                        sprites[sprite_min_x][k] = temp;
                     }
                 }
             }
         }
 
         for (size_t i = sprite_count; i > 0; i--) {
-            int32_t sprite_y = sprites[(i - 1) * 4] - 16;
-            int32_t sprite_x = sprites[(i - 1) * 4 + 1] - 8;
-            uint8_t sprite_t = sprites[(i - 1) * 4 + 2];
-            uint8_t sprite_a = sprites[(i - 1) * 4 + 3];
+            size_t sprite_index = i - 1;
+            int32_t sprite_y = sprites[sprite_index][0] - 16;
+            int32_t sprite_x = sprites[sprite_index][1] - 8;
+            uint8_t sprite_t = sprites[sprite_index][2];
+            uint8_t sprite_a = sprites[sprite_index][3];
 
             bool flip_x = (sprite_a & SPRITE_FLIP_X_BIT) >> 5;
             // TODO: Verify this functionality
